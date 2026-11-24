@@ -90,10 +90,23 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `POST /api/v1/labour/attendance` `{marks:[{workerId, units}]}` | Roll call (1, 0.5, 0); re-marking replaces |
 | `POST /api/v1/labour/workers/:id/piece` · `/advance` · `/pay` | Piece work; advance; pay (advance recovery ≤ 50% of the period's wages) |
 | `GET /api/v1/labour/workers/:id/pay-preview` · `/history` · `/slip` | Split before paying; ledger; WhatsApp wage slip |
+| `GET /api/v1/bills/samples` | Whether photo reading is on (AI), and the demo sample bills |
+| `POST /api/v1/bills/scan` `{image:{base64,mediaType}}` or `{sampleKey}` | Read a bill → draft with GSTIN / arithmetic checks, supplier + material matching, tax credit (nothing saved yet; photo kept) |
+| `POST /api/v1/bills/:id/confirm` `{materialIds?}` | Save it: stock in, multi-line GST purchase with ITC, money to pay, GST alert if the GSTIN fails (second call → 409) |
+| `GET /api/v1/invoices/:id/pdf` | Tax invoice / bill of supply / proforma as an A4 PDF (Rule 46 fields, amount in words) |
+| `GET /api/v1/gst/periods` | Last 6 months and 4 financial-year quarters |
+| `GET /api/v1/gst/summary?month=2026-11` or `?quarter=2026-Q3` | Regular: output tax vs ITC, payable / carry forward, ITC at risk · Composition: 1% CMP-08 estimate + limit watch · Unregistered: registration threshold + inter-state warning · issues and filing hints |
+| `GET /api/v1/gst/export.csv` · `GET /api/v1/gst/gstr1.json` | Files for the CA (review before filing); GSTR-1 only for regular dealers |
 | `GET /health` | DB check and AI mode |
+
+## Files
+
+Bill photos are saved through the `FileStore` interface (`LocalFileStore` → `uploads/`, a Docker volume). Swap in cloud
+storage by adding another implementation in `container.ts`. Demo bill images live in `assets/samples/`.
 
 ## AI
 
 Set `ANTHROPIC_API_KEY` to let Claude (`claude-opus-5-5`, structured output, low effort, server-side refusal fallback)
-read free-form voice notes. Without it, or with `SUTRA_AI=off`, the rule-based Hindi/Hinglish parser is used.
+read free-form voice notes and bill photos. Without it, or with `SUTRA_AI=off`, the rule-based Hindi/Hinglish parser
+is used for voice, and only the three sample bills can be "read" (photos are refused with a clear message).
 Either way, nothing is saved until the user confirms the preview.
