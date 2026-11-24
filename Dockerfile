@@ -22,7 +22,10 @@ COPY prisma ./prisma
 RUN npx prisma generate
 COPY tsconfig.json ./
 COPY src ./src
+COPY assets ./assets
 COPY --from=build /app/dist ./dist
+# bill photos; mounted as a volume in docker-compose
+RUN mkdir -p uploads && chown node:node uploads
 USER node
 EXPOSE 4000
 CMD ["node", "dist/server.js"]

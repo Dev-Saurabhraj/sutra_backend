@@ -20,6 +20,15 @@ export class PartnerRepository {
     return (await this.suppliers(producerId)).find((s) => s.id === id) ?? null;
   }
 
+  /** Suppliers are a shared directory: the same GSTIN is the same supplier for every producer. */
+  supplierByGstin(gstin: string): Promise<SupplierRow | null> {
+    if (!gstin) return Promise.resolve(null);
+    return this.db.supplier.findFirst({
+      where: { gstin: gstin.toUpperCase() },
+      select: { id: true, name: true, phone: true, city: true, state: true, gstin: true, leadTimeDays: true },
+    });
+  }
+
   createSupplier(data: { producerId: string; name: string; phone: string; city: string; state: string; gstin: string; leadTimeDays: number }): Promise<SupplierRow> {
     return this.db.supplier.create({ data, select: { id: true, name: true, phone: true, city: true, state: true, gstin: true, leadTimeDays: true } });
   }

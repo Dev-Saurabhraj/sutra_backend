@@ -1,47 +1,49 @@
 {
-    "name":  "sutra-backend",
-    "version":  "1.0.0",
-    "description":  "Sutra API: Node + Express + TypeScript + Prisma/PostgreSQL",
-    "main":  "dist/server.js",
-    "scripts":  {
-                    "dev":  "tsx watch --env-file-if-exists=.env src/server.ts",
-                    "build":  "tsc -p tsconfig.build.json",
-                    "start":  "node dist/server.js",
-                    "typecheck":  "tsc --noEmit",
-                    "test":  "vitest run",
-                    "test:watch":  "vitest",
-                    "db:generate":  "prisma generate",
-                    "db:push":  "prisma db push",
-                    "db:seed":  "tsx --env-file-if-exists=.env prisma/seed.ts",
-                    "db:reset":  "prisma db push --force-reset \u0026\u0026 npm run db:seed"
-                },
-    "license":  "UNLICENSED",
-    "type":  "module",
-    "dependencies":  {
-                         "@anthropic-ai/sdk":  "^1.13.0",
-                         "@prisma/client":  "^6.19.3",
-                         "cors":  "^2.8.6",
-                         "express":  "^5.3.0",
-                         "express-rate-limit":  "^8.7.5",
-                         "helmet":  "^8.3.0",
-                         "jsonwebtoken":  "^9.0.3",
-                         "pino":  "^10.4.0",
-                         "pino-http":  "^11.0.0",
-                         "zod":  "^4.6.7"
-                     },
-    "devDependencies":  {
-                            "@types/cors":  "^2.8.19",
-                            "@types/express":  "^5.0.6",
-                            "@types/jsonwebtoken":  "^9.0.10",
-                            "@types/node":  "^26.6.6",
-                            "pino-pretty":  "^13.2.0",
-                            "prisma":  "^6.19.3",
-                            "tsx":  "^4.23.15",
-                            "typescript":  "^7.0.2",
-                            "vitest":  "^4.1.12"
-                        },
-    "private":  true,
-    "engines":  {
-                    "node":  "\u003e=22"
-                }
+    "name": "sutra-backend",
+    "version": "1.0.0",
+    "description": "Sutra API: Node + Express + TypeScript + Prisma/PostgreSQL",
+    "main": "dist/server.js",
+    "scripts": {
+        "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+        "build": "tsc -p tsconfig.build.json",
+        "start": "node dist/server.js",
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "db:generate": "prisma generate",
+        "db:push": "prisma db push",
+        "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
+        "db:reset": "prisma db push --force-reset && npm run db:seed"
+    },
+    "license": "UNLICENSED",
+    "type": "module",
+    "dependencies": {
+        "@anthropic-ai/sdk": "^1.13.0",
+        "@prisma/client": "^6.19.3",
+        "cors": "^2.8.6",
+        "express": "^5.3.0",
+        "express-rate-limit": "^8.7.5",
+        "helmet": "^8.3.0",
+        "jsonwebtoken": "^9.0.3",
+        "pdfkit": "^0.21.0",
+        "pino": "^10.4.0",
+        "pino-http": "^11.0.0",
+        "zod": "^4.6.7"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/node": "^26.6.6",
+        "@types/pdfkit": "^0.17.7",
+        "pino-pretty": "^13.2.0",
+        "prisma": "^6.19.3",
+        "tsx": "^4.23.15",
+        "typescript": "^7.0.2",
+        "vitest": "^4.1.12"
+    },
+    "private": true,
+    "engines": {
+        "node": ">=22"
+    }
 }

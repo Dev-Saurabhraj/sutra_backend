@@ -253,6 +253,7 @@ model Producer {
   workers        Worker[]
   workEntries    WorkEntry[]
   workerPayments WorkerPayment[]
+  billScans      BillScan[]
 }
 
 model Supplier {
@@ -577,4 +578,19 @@ model WorkerPayment {
   paidAt     DateTime          @default(now())
 
   @@index([workerId, paidAt])
+}
+/// A photographed supplier bill: what was read (draft), from which photo, and the purchase it became once confirmed.
+model BillScan {
+  id          String    @id @default(cuid())
+  producerId  String
+  producer    Producer  @relation(fields: [producerId], references: [id])
+  imagePath   String? // stored photo (RULES B2: keep the original next to the record)
+  sampleKey   String? // demo sample bill
+  parsed      Json
+  parser      String // "ai:<model>" | "sample"
+  confirmedAt DateTime?
+  purchaseId  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([producerId, createdAt])
 }

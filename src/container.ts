@@ -23,6 +23,14 @@ import { HomeService } from "./modules/producers/home.service.js";
 import { LabourService } from "./modules/labour/labour.service.js";
 import { InventoryService } from "./modules/inventory/inventory.service.js";
 import { OnboardingService } from "./modules/onboarding/onboarding.service.js";
+import { InvoicePdfRenderer } from "./modules/invoices/invoice-pdf.js";
+import { BillService } from "./modules/bills/bill.service.js";
+import { FallbackBillReader, type BillReader } from "./modules/bills/bill-reader.js";
+import { ClaudeBillReader } from "./modules/bills/claude-bill-reader.js";
+import { SampleBillReader } from "./modules/bills/sample-bills.js";
+import { GstService } from "./modules/gst/gst.service.js";
+import { GstRepository } from "./modules/gst/gst.repository.js";
+import { LocalFileStore } from "./core/file-store.js";
 
 export type Container = {
   env: Env;
@@ -41,9 +49,11 @@ export type Container = {
   labour: LabourService;
   inventory: InventoryService;
   onboarding: OnboardingService;
+  bills: BillService;
+  gst: GstService;
 };
 
-export function buildContainer(env: Env, logger: Logger, clock: Clock = systemClock): Container {
+export function buildContainer(env: Env, logger: Logger, clock: Clock = systemClock, uploadsDir = "uploads"): Container {
   const prisma = createPrisma(env.DATABASE_URL);
   const repos = createRepositories(prisma);
   const uow = new PrismaUnitOfWork(prisma);
@@ -58,16 +68,21 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
   const auth = new AuthService(repos.auth, tokens, new LogOtpSender(logger), clock, devOtp);
 
   const stock = new StockService(repos, repos.producers, clock);
-  const invoices = new InvoiceService(repos.invoices);
+  const invoices = new InvoiceService(repos.invoices, repos.producers, new InvoicePdfRenderer());
   const labour = new LabourService(repos, uow, clock);
   const inventory = new InventoryService(repos, uow, invoices, labour, stock, bus, clock);
   const voice = new VoiceService(repos, uow, voiceParser, VoiceActionRegistry.withDefaults(), inventory, bus, clock);
   const khata = new KhataService(repos.khata, repos.producers, clock);
   const alerts = new AlertService(repos.alerts);
-  const home = new HomeService(repos, stock, labour, inventory, clock);
+  const gst = new GstService(new GstRepository(prisma), repos, clock);
+  const home = new HomeService(repos, stock, labour, inventory, gst, clock);
+  const billReader: BillReader = new FallbackBillReader(
+    env.aiEnabled ? [new ClaudeBillReader(env.ANTHROPIC_API_KEY, logger), new SampleBillReader(() => clock.now())] : [new SampleBillReader(() => clock.now())],
+  );
+  const bills = new BillService(repos, uow, billReader, new LocalFileStore(uploadsDir), clock, env.aiEnabled);
   const onboarding = new OnboardingService(repos, uow, auth, clock);
 
   registerLowStockWatcher(bus, stock, repos.alerts);
 
-  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding };
+  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst };
 }

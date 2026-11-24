@@ -33,8 +33,11 @@ services:
       DATABASE_URL: postgresql://sutra:sutra@db:5432/sutra?schema=public
     ports:
       - "4000:4000"
+    volumes:
+      - uploads:/app/uploads
     # Apply the schema on start; seeding is a separate, explicit step (see README).
     command: sh -c "npx prisma db push --skip-generate && node dist/server.js"
 
 volumes:
   pgdata:
+  uploads:

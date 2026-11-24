@@ -11,6 +11,7 @@ import { VoiceRepository } from "../modules/voice/voice.repository.js";
 import { CounterRepository } from "./counter.repository.js";
 import { PartnerRepository } from "../modules/inventory/partner.repository.js";
 import { LabourRepository } from "../modules/labour/labour.repository.js";
+import { BillRepository } from "../modules/bills/bill.repository.js";
 
 /** Every repository, bound to one database client (the root client or a transaction). */
 export type Repositories = {
@@ -25,6 +26,7 @@ export type Repositories = {
   counters: CounterRepository;
   partners: PartnerRepository;
   labour: LabourRepository;
+  bills: BillRepository;
 };
 
 export function createRepositories(db: DbClient): Repositories {
@@ -40,6 +42,7 @@ export function createRepositories(db: DbClient): Repositories {
     counters: new CounterRepository(db),
     partners: new PartnerRepository(db),
     labour: new LabourRepository(db),
+    bills: new BillRepository(db),
   };
 }
 

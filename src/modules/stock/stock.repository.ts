@@ -110,10 +110,16 @@ export class StockRepository {
 
   createPurchase(data: {
     producerId: string; supplierId: string; billNo: string; billDate: Date; taxable: number; cgst: number; sgst: number; igst: number;
-    total: number; gstinValid: boolean; item: { materialId: string; qty: number; rate: number; amount: number };
+    total: number; gstinValid: boolean; source?: EntrySource; aiModel?: string | null;
+    items: { materialId: string; qty: number; rate: number; amount: number }[];
   }) {
-    const { item, ...rest } = data;
-    return this.db.purchase.create({ data: { ...rest, source: "APP", items: { create: [item] } } });
+    const { items, ...rest } = data;
+    return this.db.purchase.create({ data: { source: "APP", ...rest, items: { create: items } } });
+  }
+
+  /** A pending reorder is done once the material has arrived. */
+  async markSupplierOrdersReceived(materialId: string): Promise<void> {
+    await this.db.supplierOrder.updateMany({ where: { materialId, status: "SENT" }, data: { status: "RECEIVED" } });
   }
 
   async movements(producerId: string, filter: { materialId?: string; productId?: string }, take: number) {

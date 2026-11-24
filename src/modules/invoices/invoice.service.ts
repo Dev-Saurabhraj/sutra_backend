@@ -3,6 +3,8 @@ import type { Repositories } from "../../data/unit-of-work.js";
 import { businessPrefix, financialYear, invoiceNumber } from "../../shared/gst/financial-year.js";
 import { decideSaleDocument, noTax, splitTax, type GstSchemeKind } from "../../shared/gst/tax.js";
 import type { InvoiceRecord, InvoiceRepository } from "./invoice.repository.js";
+import type { InvoicePdfRenderer } from "./invoice-pdf.js";
+import type { ProducerRepository } from "../producers/producer.repository.js";
 
 export type SaleInvoiceInput = {
   producer: { id: string; businessName: string; state: string; gstScheme: GstSchemeKind };
@@ -19,7 +21,18 @@ export type SaleInvoiceInput = {
  * a regular dealer issues a tax invoice; composition and unregistered sellers issue a bill of supply.
  */
 export class InvoiceService {
-  constructor(private readonly invoices: InvoiceRepository) {}
+  constructor(
+    private readonly invoices: InvoiceRepository,
+    private readonly producers: ProducerRepository,
+    private readonly pdf: InvoicePdfRenderer,
+  ) {}
+
+  /** The invoice as a PDF to share on WhatsApp or print. */
+  async pdfFor(producerId: string, id: string): Promise<{ filename: string; bytes: Buffer }> {
+    const [inv, seller] = await Promise.all([this.get(producerId, id), this.producers.findProfile(producerId)]);
+    if (!seller) throw AppError.notFound("Producer");
+    return { filename: `${inv.number.replace(/\//g, "-")}.pdf`, bytes: await this.pdf.render(inv, seller) };
+  }
 
   list(producerId: string, take = 30) {
     return this.invoices.list(producerId, take);

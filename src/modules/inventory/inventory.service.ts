@@ -97,7 +97,7 @@ export class InventoryService {
     const purchase = await repos.stock.createPurchase({
       producerId: producer.id, supplierId, billNo: input.billNo || `APP-${Date.now().toString(36).toUpperCase()}`, billDate: this.clock.now(),
       ...tax, gstinValid: validateGstin(supplier.gstin).valid,
-      item: { materialId: material.id, qty: input.qty, rate: input.rate, amount: round2(input.qty * input.rate) },
+      items: [{ materialId: material.id, qty: input.qty, rate: input.rate, amount: round2(input.qty * input.rate) }],
     });
     await repos.stock.setMaterialCost(material.id, input.rate);
     await repos.khata.create({

@@ -15,6 +15,14 @@ export function invoiceRouter(invoices: InvoiceService): Router {
     res.json({ invoices: await invoices.list(producerIdOf(req), limit) });
   });
 
+  r.get("/:id/pdf", async (req, res) => {
+    const { id } = parse(IdParam, req.params);
+    const file = await invoices.pdfFor(producerIdOf(req), id);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${file.filename}"`);
+    res.send(file.bytes);
+  });
+
   r.get("/:id", async (req, res) => {
     const { id } = parse(IdParam, req.params);
     res.json(await invoices.get(producerIdOf(req), id));

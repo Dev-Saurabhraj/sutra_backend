@@ -5,6 +5,7 @@ import { addDays, type Clock } from "../../shared/time.js";
 import type { InventoryService } from "../inventory/inventory.service.js";
 import type { LabourService } from "../labour/labour.service.js";
 import type { StockService } from "../stock/stock.service.js";
+import type { GstService } from "../gst/gst.service.js";
 
 /** The "Aaj" (today) screen: what needs attention, money in/out, the flow of goods, and the team — mostly numbers, little text. */
 export class HomeService {
@@ -13,6 +14,7 @@ export class HomeService {
     private readonly stock: StockService,
     private readonly labour: LabourService,
     private readonly inventory: InventoryService,
+    private readonly gst: GstService,
     private readonly clock: Clock,
   ) {}
 
@@ -21,7 +23,7 @@ export class HomeService {
     const producer = await this.repos.producers.findProfile(producerId);
     if (!producer) throw AppError.notFound("Producer");
 
-    const [alerts, health, sales, khata, openOrders, newRequests, flow, team] = await Promise.all([
+    const [alerts, health, sales, khata, openOrders, newRequests, flow, team, gst] = await Promise.all([
       this.repos.alerts.list(producerId, { unreadOnly: true, take: 6 }),
       this.stock.health(producerId),
       this.repos.invoices.salesSince(producerId, addDays(now, -30)),
@@ -30,6 +32,7 @@ export class HomeService {
       this.repos.orders.countByStatus(producerId, ["QUOTED"]),
       this.inventory.flow(producerId),
       this.labour.summary(producerId),
+      this.gst.summary(producerId, {}),
     ]);
 
     const lowCount = health.filter((m) => m.status !== "OK").length;
@@ -69,6 +72,14 @@ export class HomeService {
         wageDue: team.totals.wageDue,
         overdue: team.totals.overdue,
         advancePending: team.totals.advancePending,
+      },
+      gst: {
+        scheme: gst.scheme,
+        period: gst.period.label,
+        // what goes to the government this month, by scheme
+        due: "net" in gst ? gst.net.payable : "composition" in gst ? gst.composition.tax : 0,
+        itc: "itc" in gst ? gst.itc.total : 0,
+        issues: gst.issues.length,
       },
       materials: health.slice(0, 6),
     };

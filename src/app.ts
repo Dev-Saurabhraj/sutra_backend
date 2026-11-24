@@ -17,6 +17,8 @@ import { invoiceRouter } from "./modules/invoices/invoice.controller.js";
 import { inventoryRouter } from "./modules/inventory/inventory.controller.js";
 import { labourRouter } from "./modules/labour/labour.controller.js";
 import { onboardingRouter } from "./modules/onboarding/onboarding.controller.js";
+import { billRouter } from "./modules/bills/bill.controller.js";
+import { gstRouter } from "./modules/gst/gst.controller.js";
 
 export function createApp(c: Container): Express {
   const app = express();
@@ -24,6 +26,8 @@ export function createApp(c: Container): Express {
   app.set("trust proxy", 1);
   app.use(helmet());
   app.use(cors({ origin: c.env.corsOrigins === "*" ? true : c.env.corsOrigins }));
+  // bill photos arrive as base64; only that route accepts a large body
+  app.use("/api/v1/bills/scan", express.json({ limit: "12mb" }));
   app.use(express.json({ limit: "1mb" }));
   app.use(pinoHttp({ logger: c.logger, autoLogging: { ignore: (req) => req.url === "/health" } }));
 
@@ -48,6 +52,8 @@ export function createApp(c: Container): Express {
   secured.use("/invoices", invoiceRouter(c.invoices));
   secured.use("/inventory", inventoryRouter(c.inventory));
   secured.use("/labour", labourRouter(c.labour));
+  secured.use("/bills", billRouter(c.bills));
+  secured.use("/gst", gstRouter(c.gst));
   v1.use(secured);
 
   app.use("/api/v1", v1);
