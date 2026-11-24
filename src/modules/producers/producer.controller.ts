@@ -14,13 +14,15 @@ export function meRouter(repos: Repositories, auth: AuthService, home: HomeServi
   const r = Router();
 
   r.get("/me", async (req, res) => {
-    const [user, producer] = await Promise.all([
-      repos.auth.findUserById(userIdOf(req)),
-      req.auth?.producerId ? repos.producers.findProfile(req.auth.producerId) : null,
-    ]);
+    const user = await repos.auth.findUserById(userIdOf(req));
     if (!user) throw AppError.unauthorized();
+    // From the database, not the token: the token may predate onboarding.
+    const producer = user.producerId ? await repos.producers.findProfile(user.producerId) : null;
     res.json({
-      user: { id: user.id, phone: user.phone, role: user.role, language: user.language, needsConsent: user.consentVersion !== CONSENT_VERSION },
+      user: {
+        id: user.id, phone: user.phone, role: user.role, language: user.language,
+        needsConsent: user.consentVersion !== CONSENT_VERSION, needsOnboarding: user.producerId === null,
+      },
       producer,
       consentVersion: CONSENT_VERSION,
     });

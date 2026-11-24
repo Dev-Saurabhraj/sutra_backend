@@ -15,7 +15,7 @@ export type Session = {
   accessToken: string;
   refreshToken: string;
   expiresInSec: number;
-  user: { id: string; phone: string; role: string; producerId: string | null; language: string; needsConsent: boolean };
+  user: { id: string; phone: string; role: string; producerId: string | null; language: string; needsConsent: boolean; needsOnboarding: boolean };
 };
 
 /** India mobile numbers → E.164. Accepts "98000 00001", "+91-98000-00001", "09800000001". */
@@ -38,9 +38,7 @@ export class AuthService {
   async requestOtp(rawPhone: string): Promise<{ phone: string; expiresInSec: number; devOtpEnabled: boolean }> {
     const phone = normalizePhone(rawPhone);
     const now = this.clock.now();
-    if (!(await this.repo.findUserByPhone(phone))) {
-      throw new AppError(404, "NOT_REGISTERED", "This number is not on Sutra yet. Ask your cluster office to add you.");
-    }
+    // New numbers are welcome: the account is created on first successful verification, then onboarding follows.
     const recent = await this.repo.countOtpsSince(phone, new Date(now.getTime() - OTP_WINDOW_MS));
     if (recent >= OTP_MAX_PER_WINDOW) throw AppError.tooMany("Too many codes requested. Try again in 15 minutes.");
 
@@ -63,8 +61,7 @@ export class AuthService {
       throw AppError.badRequest("OTP_WRONG", "That code is not right. Please check and try again.");
     }
     await this.repo.consumeOtp(challenge.id, now);
-    const user = await this.repo.findUserByPhone(phone);
-    if (!user) throw AppError.unauthorized();
+    const user = (await this.repo.findUserByPhone(phone)) ?? (await this.repo.createUser(phone));
     return this.issueSession(user);
   }
 
@@ -87,6 +84,13 @@ export class AuthService {
     if (row) await this.repo.revokeRefreshToken(row.id, this.clock.now());
   }
 
+  /** A fresh session for a user, e.g. right after onboarding links them to their new business. */
+  async sessionFor(userId: string): Promise<Session> {
+    const user = await this.repo.findUserById(userId);
+    if (!user) throw AppError.unauthorized();
+    return this.issueSession(user);
+  }
+
   async recordConsent(userId: string, version: string): Promise<void> {
     if (version !== CONSENT_VERSION) throw AppError.badRequest("CONSENT_OUTDATED", "Please read the latest privacy notice");
     await this.repo.recordConsent(userId, version, this.clock.now());
@@ -102,6 +106,7 @@ export class AuthService {
       user: {
         id: user.id, phone: user.phone, role: user.role, producerId: user.producerId, language: user.language,
         needsConsent: user.consentVersion !== CONSENT_VERSION,
+        needsOnboarding: user.producerId === null,
       },
     };
   }

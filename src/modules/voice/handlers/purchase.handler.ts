@@ -19,9 +19,10 @@ export class PurchaseHandler implements VoiceActionHandler {
     };
   }
 
-  async execute(a: VoiceAction, { repos, producer, catalog }: ExecuteContext): Promise<ActionResult> {
+  async execute(a: VoiceAction, { repos, producer, catalog, inventory }: ExecuteContext): Promise<ActionResult> {
     const m = catalog.materials.get(a.materialId)!;
-    await repos.stock.moveMaterial({ producerId: producer.id, materialId: m.id, kind: "PURCHASE", qty: a.qty, source: "VOICE" });
+    // No rate in a voice note, so this is a stock movement only; the bill photo adds the GST purchase.
+    await inventory.stockInIn(repos, producer, { materialId: m.id, qty: a.qty, source: "VOICE" });
     return { text: `Stock +${a.qty} ${m.unit} ${m.name}`, textHi: `${a.qty} ${m.unit} ${m.nameHi} जुड़ा` };
   }
 }

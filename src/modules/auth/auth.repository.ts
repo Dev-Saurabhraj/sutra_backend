@@ -56,6 +56,14 @@ export class AuthRepository {
     return this.db.user.update({ where: { id: userId }, data: { consentVersion: version, consentAt: at } });
   }
 
+  createUser(phone: string) {
+    return this.db.user.create({ data: { phone, role: "PRODUCER" } });
+  }
+
+  linkProducer(userId: string, producerId: string, language: string) {
+    return this.db.user.update({ where: { id: userId }, data: { producerId, language } });
+  }
+
   setLanguage(userId: string, language: string) {
     return this.db.user.update({ where: { id: userId }, data: { language } });
   }

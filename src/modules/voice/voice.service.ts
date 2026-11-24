@@ -4,7 +4,7 @@ import type { Repositories, UnitOfWork } from "../../data/unit-of-work.js";
 import type { EventBus } from "../../events/event-bus.js";
 import { VoiceActionSchema, type VoiceAction, type VoiceParser } from "../../ai/voice-parser.js";
 import type { Clock } from "../../shared/time.js";
-import type { InvoiceService } from "../invoices/invoice.service.js";
+import type { InventoryService } from "../inventory/inventory.service.js";
 import type { ProducerProfile } from "../producers/producer.repository.js";
 import type { ActionResult, ActionView, VoiceCatalog } from "./handlers/types.js";
 import type { VoiceActionRegistry } from "./voice.registry.js";
@@ -29,7 +29,7 @@ export class VoiceService {
     private readonly uow: UnitOfWork,
     private readonly parser: VoiceParser,
     private readonly registry: VoiceActionRegistry,
-    private readonly invoices: InvoiceService,
+    private readonly inventory: InventoryService,
     private readonly bus: EventBus,
     private readonly clock: Clock,
   ) {}
@@ -77,7 +77,7 @@ export class VoiceService {
       for (const action of actions) {
         const handler = this.registry.get(action.kind);
         if (!handler || !handler.isValid(action, catalog)) continue;
-        const result = await handler.execute(action, { repos, producer, catalog, transcript: entry.transcript, now, invoices: this.invoices });
+        const result = await handler.execute(action, { repos, producer, catalog, transcript: entry.transcript, now, inventory: this.inventory });
         result.consumedMaterialIds?.forEach((id) => consumed.add(id));
         out.push(result);
       }

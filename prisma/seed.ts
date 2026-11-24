@@ -8,6 +8,8 @@ import { PrismaClient, type Buyer, type GstScheme, type Prisma } from "@prisma/c
 import { makeGstin } from "../src/shared/gst/gstin.js";
 import { splitTax, noTax } from "../src/shared/gst/tax.js";
 import { businessPrefix, financialYear, invoiceNumber } from "../src/shared/gst/financial-year.js";
+import { INDUSTRY_TEMPLATES } from "../src/modules/onboarding/industry-templates.js";
+import { dayRate, istDate } from "../src/modules/labour/wages.js";
 
 const db = new PrismaClient();
 
@@ -38,7 +40,7 @@ function nextInvoice(producerId: string, businessName: string, kind: "TAX" | "PR
 
 async function reset() {
   const tables = [
-    "VoiceEntry", "Message", "Alert", "LedgerEntry", "Invoice", "Order", "SupplierOrder", "PurchaseItem", "Purchase",
+    "WorkerPayment", "WorkEntry", "Worker", "VoiceEntry", "Message", "Alert", "LedgerEntry", "Invoice", "Order", "SupplierOrder", "PurchaseItem", "Purchase",
     "StockMovement", "RecipeItem", "Product", "Material", "RefreshToken", "OtpChallenge", "IdempotencyRecord", "User",
     "Buyer", "Supplier", "Producer", "Cluster", "Industry", "Counter",
   ];
@@ -61,14 +63,6 @@ const PALETTES = [
   "#4D7C0F,#ECFCCB", "#6D28D9,#EDE9FE", "#BE123C,#FFE4E6", "#155E75,#CFFAFE", "#92400E,#FDE68A",
 ];
 
-const INDUSTRIES = [
-  { key: "handloom", name: "Handloom", nameHi: "हथकरघा", machine: "loom", machineHi: "करघा", emoji: "🧵" },
-  { key: "brass", name: "Brass & Metal", nameHi: "पीतल", machine: "worker", machineHi: "कारीगर", emoji: "🪔" },
-  { key: "toys", name: "Wooden Toys", nameHi: "लकड़ी के खिलौने", machine: "lathe", machineHi: "खराद", emoji: "🪀" },
-  { key: "pottery", name: "Pottery", nameHi: "मिट्टी के बर्तन", machine: "kiln", machineHi: "भट्ठी", emoji: "🏺" },
-  { key: "food", name: "Food Processing", nameHi: "खाद्य प्रसंस्करण", machine: "line", machineHi: "लाइन", emoji: "🫙" },
-  { key: "machining", name: "Machine Shop", nameHi: "मशीन शॉप", machine: "machine", machineHi: "मशीन", emoji: "⚙️" },
-];
 
 const HANDLOOM_MATS: MatDef[] = [
   { key: "silk", name: "Mulberry silk yarn", nameHi: "रेशम धागा", unit: "kg", hsn: "5004", gst: 5, cost: 5600, supplier: "silk" },
@@ -142,7 +136,9 @@ const HERO_PRODUCT_STOCK: Record<string, number> = { "sc-saree": 24, "silk-saree
 
 async function main() {
   await reset();
-  await db.industry.createMany({ data: INDUSTRIES });
+  await db.industry.createMany({
+    data: INDUSTRY_TEMPLATES.map(({ materials, products, labour, ...row }) => ({ ...row, template: { materials, products, labour } })),
+  });
 
   const sup = {
     silk: await db.supplier.create({ data: { name: "Shree Krishna Silk Traders", city: "Surat", state: "Gujarat", phone: "+91 98251 44120", gstin: makeGstin("Gujarat", "AAKFS2286D"), leadTimeDays: 7 } }),
@@ -172,13 +168,13 @@ async function main() {
   const moradabad = await db.cluster.create({ data: { slug: "moradabad", name: "Moradabad Brass Cluster", city: "Moradabad", state: "Uttar Pradesh", industryKey: "brass" } });
 
   let phoneNo = 0;
-  async function createMaker(m: MakerDef, clusterId: string, city: string, state: string, agentCut: number) {
+  async function createMaker(m: MakerDef, clusterId: string, industryKey: string, city: string, state: string, agentCut: number) {
     phoneNo += 1;
     const scheme = m.scheme ?? "REGULAR";
     const phone = `+9198000000${String(phoneNo).padStart(2, "0")}`;
     const producer = await db.producer.create({
       data: {
-        slug: m.slug, clusterId, name: m.name, businessName: m.biz, city, state, phone,
+        slug: m.slug, clusterId, industryKey, onboardedAt: daysAgo(80), name: m.name, businessName: m.biz, city, state, phone,
         gstin: scheme === "UNREGISTERED" ? null : makeGstin(state, pan(m.name.split(" ").slice(-1)[0] ?? "X")),
         gstScheme: scheme, machines: m.machines, story: m.story, avatarColor: m.color, onTimeRate: m.onTime ?? between(0.86, 0.95),
         joinedAt: daysAgo(m.slug === "rohit" ? 75 : int(30, 70)), agentCutPct: agentCut,
@@ -190,12 +186,12 @@ async function main() {
   }
 
   for (const [wi, w] of WEAVERS.entries()) {
-    const producer = await createMaker(w, chanderi.id, "Chanderi", "Madhya Pradesh", 25);
+    const producer = await createMaker(w, chanderi.id, "handloom", "Chanderi", "Madhya Pradesh", 25);
     const prods = w.all ? HANDLOOM_PRODS : HANDLOOM_PRODS.filter((_, i) => i === 0 || (wi + i) % 2 === 0);
     await buildProducer(producer, w.slug, wi, HANDLOOM_MATS, prods, w.slug === "rohit");
   }
   for (const [i, m] of BRASS_MAKERS.entries()) {
-    const producer = await createMaker(m, moradabad.id, "Moradabad", "Uttar Pradesh", 22);
+    const producer = await createMaker(m, moradabad.id, "brass", "Moradabad", "Uttar Pradesh", 22);
     await buildProducer(producer, m.slug, i + 3, BRASS_MATS, BRASS_PRODS, false);
   }
 
@@ -359,10 +355,13 @@ async function main() {
         { producerId: rohit.id, party: "Neel Textiles, Jaipur", direction: "RECEIVE", amount: 35700, note: "Advance balance for 40 dupattas", dueDate: daysAhead(10), createdAt: daysAgo(4) },
         { producerId: rohit.id, party: "Kaveri Boutique, Bengaluru", direction: "RECEIVE", amount: 21840, note: "Invoice balance (Oct order)", dueDate: daysAgo(3), createdAt: daysAgo(38) },
         { producerId: rohit.id, party: "Mahalaxmi Zari Works", direction: "PAY", amount: 18400, note: "Zari, last bill", dueDate: daysAhead(6) },
-        { producerId: rohit.id, party: "Weavers' wages (week)", direction: "PAY", amount: 26400, note: "12 looms, weekly wages", dueDate: daysAhead(2) },
+
+
         { producerId: rohit.id, party: "Saanjh Studio, Mumbai", direction: "RECEIVE", amount: 16800, note: "Paid via UPI", dueDate: daysAgo(12), settled: true, settledAt: daysAgo(10) },
       ],
     });
+
+    await rohitTeam(rohit.id, silkSaree.id, rohit.products.find((p) => p.slug === "rohit-sc-saree")!.id, dupatta.id);
 
     await db.alert.createMany({
       data: [
@@ -374,6 +373,53 @@ async function main() {
           body: "₹21,840 was due 3 days ago.", bodyHi: "₹21,840 तीन दिन पहले देय था।", route: "/khata", createdAt: daysAgo(2) },
       ],
     });
+  }
+
+  /** Rohit's karigars: three weeks of attendance and piece work, wages paid each Saturday, one advance being recovered. */
+  async function rohitTeam(producerId: string, silkId: string, sareeId: string, dupattaId: string) {
+    const team = [
+      { name: "Salim Ansari", phone: "+919811000001", skill: "बुनकर", wageType: "PIECE" as const, rate: 700, productId: sareeId, perWeek: 3 },
+      { name: "Raju Koli", phone: "+919811000002", skill: "बुनकर", wageType: "PIECE" as const, rate: 1400, productId: silkId, perWeek: 1 },
+      { name: "Meena Bai", phone: "+919811000003", skill: "बुनकर", wageType: "PIECE" as const, rate: 120, productId: dupattaId, perWeek: 9 },
+      { name: "Shanno Bi", phone: "+919811000004", skill: "नरी भरना", wageType: "DAILY" as const, rate: 350, productId: null, perWeek: 0 },
+      { name: "Imran Khan", phone: "+919811000005", skill: "ताना", wageType: "DAILY" as const, rate: 400, productId: null, perWeek: 0 },
+      { name: "Babulal Vishwakarma", phone: "+919811000006", skill: "करघा मिस्त्री", wageType: "MONTHLY" as const, rate: 9100, productId: null, perWeek: 0 },
+    ];
+    const today = istDate(new Date(NOW));
+    const dow = (today.getUTCDay() + 6) % 7; // Monday = 0
+    const thisMonday = today.getTime() - dow * DAY;
+    for (const [i, t] of team.entries()) {
+      const { perWeek, ...data } = t;
+      const w = await db.worker.create({ data: { ...data, producerId, payCycle: t.wageType === "MONTHLY" ? "MONTHLY" : "WEEKLY", joinedAt: daysAgo(200) } });
+      for (let week = 2; week >= 0; week--) {
+        const monday = thisMonday - week * 7 * DAY;
+        const lastDay = week === 0 ? dow : 5;
+        let earned = 0;
+        for (let d = 0; d <= lastDay; d++) {
+          const date = new Date(monday + d * DAY);
+          const units = (i + d + week) % 7 === 3 ? 0.5 : 1;
+          const rate = t.wageType === "PIECE" ? 0 : dayRate(t.wageType, t.rate);
+          await db.workEntry.create({ data: { producerId, workerId: w.id, kind: "ATTENDANCE", date, units, rate, amount: r2(rate * units), source: "SEED" } });
+          earned += rate * units;
+        }
+        if (t.wageType === "PIECE") {
+          const pieces = Math.max(1, Math.round(perWeek * (week === 0 ? (lastDay + 1) / 6 : 1)));
+          await db.workEntry.create({ data: { producerId, workerId: w.id, kind: "PIECE", date: new Date(monday + lastDay * DAY), units: pieces, rate: t.rate, amount: pieces * t.rate, productId: t.productId, source: "SEED" } });
+          earned += pieces * t.rate;
+        }
+        // previous weeks were paid on Saturday; the monthly mechanic is paid by the 7th
+        if (week > 0 && t.wageType !== "MONTHLY" && !(i === 1 && week === 1)) {
+          const paidAt = new Date(monday + 5 * DAY + 11 * 3_600_000);
+          // Salim's advance is being recovered: last week, half his wages went against it (the legal maximum).
+          const recovery = i === 0 && week === 1 ? r2(earned / 2) : 0;
+          if (recovery > 0) await db.workerPayment.create({ data: { producerId, workerId: w.id, kind: "RECOVERY", amount: recovery, mode: "CASH", note: "Advance adjusted from wages", paidAt } });
+          await db.workerPayment.create({ data: { producerId, workerId: w.id, kind: "WAGE", amount: r2(earned - recovery), mode: i % 2 ? "UPI" : "CASH", paidAt } });
+        }
+      }
+    }
+    // Salim took a ₹5,000 advance (peshgi) for his daughter's school fees; it is recovered from wages.
+    const salim = await db.worker.findFirstOrThrow({ where: { producerId, name: "Salim Ansari" } });
+    await db.workerPayment.create({ data: { producerId, workerId: salim.id, kind: "ADVANCE", amount: 5000, mode: "CASH", note: "School fees", paidAt: daysAgo(20) } });
   }
 
   const counts = {

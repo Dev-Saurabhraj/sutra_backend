@@ -51,6 +51,9 @@ prisma/                    schema.prisma, seed.ts
 | Command + Registry | `modules/voice/handlers/*`, `voice.registry.ts` | One handler per voice action; a new action is a new class |
 | Factory | `InvoiceService.issueForSale` | Picks tax invoice vs bill of supply by GST scheme and numbers it per FY |
 | Observer | `events/event-bus.ts`, `low-stock.watcher.ts` | Low-stock alerts after a commit, without the voice code knowing |
+| Domain service shared by channels | `InventoryService.*In(repos, …)` | Voice entries and app taps run the same produce/sell/stock-in code inside one transaction |
+| Derived ledger | `labour/wages.ts` | Wage due and advance pending are computed from append-only entries; the 50% rule is a pure, tested function |
+| Template / data-driven config | `onboarding/industry-templates.ts` | A new industry is data, not code |
 | Composition root / DI | `container.ts` | Constructor injection everywhere; no hidden singletons |
 
 ## API (v1)
@@ -75,6 +78,18 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `POST /api/v1/khata/:id/settle` · `GET /khata/:id/reminder` | Settle; reminder text + WhatsApp + UPI links |
 | `GET /api/v1/alerts?unread=true` · `POST /alerts/:id/read` · `POST /alerts/read-all` | Alerts |
 | `GET /api/v1/invoices` · `GET /invoices/:id` | Invoices / bills of supply |
+| `GET /api/v1/industries` | Industry templates (starter materials, products, recipes, usual wage type) |
+| `POST /api/v1/onboarding` | Create the whole business in one transaction → fresh session with the producer id |
+| `GET /api/v1/inventory/flow` | The five stations: suppliers · raw · making · ready · clients, plus materials and products |
+| `GET/POST /api/v1/inventory/suppliers` · `GET/POST /inventory/clients` | Partners at each end of the thread |
+| `POST /api/v1/inventory/materials` · `/materials/:id/stock-in` · `/materials/:id/adjust` | Add material; stock in (GST purchase + to-pay when a rate and supplier are given); count correction |
+| `POST /api/v1/inventory/products` · `/products/:id/produce` · `/sell` · `/adjust` | Add product with recipe; make (recipe deduction, piece wages if `workerId`); sell (GST document + khata); count |
+| `GET /api/v1/inventory/movements?materialId=&productId=` | Movement history |
+| `GET /api/v1/labour` | Team: wage due, overdue, advance pending, this period's earnings, pay-by date, today's attendance |
+| `POST /api/v1/labour/workers` · `PATCH /labour/workers/:id` | Add or edit a worker (daily / piece / monthly) |
+| `POST /api/v1/labour/attendance` `{marks:[{workerId, units}]}` | Roll call (1, 0.5, 0); re-marking replaces |
+| `POST /api/v1/labour/workers/:id/piece` · `/advance` · `/pay` | Piece work; advance; pay (advance recovery ≤ 50% of the period's wages) |
+| `GET /api/v1/labour/workers/:id/pay-preview` · `/history` · `/slip` | Split before paying; ledger; WhatsApp wage slip |
 | `GET /health` | DB check and AI mode |
 
 ## AI

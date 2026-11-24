@@ -20,6 +20,9 @@ import { VoiceActionRegistry } from "./modules/voice/voice.registry.js";
 import { KhataService } from "./modules/khata/khata.service.js";
 import { AlertService } from "./modules/alerts/alert.service.js";
 import { HomeService } from "./modules/producers/home.service.js";
+import { LabourService } from "./modules/labour/labour.service.js";
+import { InventoryService } from "./modules/inventory/inventory.service.js";
+import { OnboardingService } from "./modules/onboarding/onboarding.service.js";
 
 export type Container = {
   env: Env;
@@ -35,6 +38,9 @@ export type Container = {
   khata: KhataService;
   alerts: AlertService;
   home: HomeService;
+  labour: LabourService;
+  inventory: InventoryService;
+  onboarding: OnboardingService;
 };
 
 export function buildContainer(env: Env, logger: Logger, clock: Clock = systemClock): Container {
@@ -53,12 +59,15 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
 
   const stock = new StockService(repos, repos.producers, clock);
   const invoices = new InvoiceService(repos.invoices);
-  const voice = new VoiceService(repos, uow, voiceParser, VoiceActionRegistry.withDefaults(), invoices, bus, clock);
+  const labour = new LabourService(repos, uow, clock);
+  const inventory = new InventoryService(repos, uow, invoices, labour, stock, bus, clock);
+  const voice = new VoiceService(repos, uow, voiceParser, VoiceActionRegistry.withDefaults(), inventory, bus, clock);
   const khata = new KhataService(repos.khata, repos.producers, clock);
   const alerts = new AlertService(repos.alerts);
-  const home = new HomeService(repos, stock, clock);
+  const home = new HomeService(repos, stock, labour, inventory, clock);
+  const onboarding = new OnboardingService(repos, uow, auth, clock);
 
   registerLowStockWatcher(bus, stock, repos.alerts);
 
-  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home };
+  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding };
 }

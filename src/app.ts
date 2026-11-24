@@ -14,6 +14,9 @@ import { voiceRouter } from "./modules/voice/voice.controller.js";
 import { khataRouter } from "./modules/khata/khata.controller.js";
 import { alertRouter } from "./modules/alerts/alert.controller.js";
 import { invoiceRouter } from "./modules/invoices/invoice.controller.js";
+import { inventoryRouter } from "./modules/inventory/inventory.controller.js";
+import { labourRouter } from "./modules/labour/labour.controller.js";
+import { onboardingRouter } from "./modules/onboarding/onboarding.controller.js";
 
 export function createApp(c: Container): Express {
   const app = express();
@@ -37,11 +40,14 @@ export function createApp(c: Container): Express {
   const secured = Router();
   secured.use(authenticate(c.tokens), idempotent(c.prisma));
   secured.use(meRouter(c.repos, c.auth, c.home));
+  secured.use(onboardingRouter(c.onboarding));
   secured.use("/stock", stockRouter(c.stock));
   secured.use("/voice", voiceRouter(c.voice));
   secured.use("/khata", khataRouter(c.khata));
   secured.use("/alerts", alertRouter(c.alerts));
   secured.use("/invoices", invoiceRouter(c.invoices));
+  secured.use("/inventory", inventoryRouter(c.inventory));
+  secured.use("/labour", labourRouter(c.labour));
   v1.use(secured);
 
   app.use("/api/v1", v1);

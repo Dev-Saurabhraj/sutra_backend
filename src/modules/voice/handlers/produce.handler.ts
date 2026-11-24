@@ -1,6 +1,4 @@
-import { AppError } from "../../../core/errors.js";
 import type { VoiceAction } from "../../../ai/voice-parser.js";
-import { round3 } from "../../../shared/money.js";
 import type { ActionResult, ActionView, ExecuteContext, PreviewContext, VoiceActionHandler, VoiceCatalog } from "./types.js";
 
 /** "aaj 6 saree bani" → finished stock up, raw material down by recipe. */
@@ -21,18 +19,12 @@ export class ProduceHandler implements VoiceActionHandler {
     };
   }
 
-  async execute(a: VoiceAction, { repos, producer }: ExecuteContext): Promise<ActionResult> {
-    const product = await repos.stock.product(producer.id, a.productId);
-    if (!product) throw AppError.notFound("Product");
-    await repos.stock.moveProduct({ producerId: producer.id, productId: product.id, kind: "PRODUCE", qty: a.qty, source: "VOICE" }, a.qty);
-    for (const line of product.recipe) {
-      const used = round3(line.qtyPerUnit * a.qty);
-      await repos.stock.moveMaterial({ producerId: producer.id, materialId: line.materialId, kind: "CONSUME", qty: -used, source: "VOICE" });
-    }
+  async execute(a: VoiceAction, { repos, producer, inventory }: ExecuteContext): Promise<ActionResult> {
+    const { product, consumedMaterialIds } = await inventory.produceIn(repos, producer, { productId: a.productId, qty: a.qty, source: "VOICE" });
     return {
       text: `Stock +${a.qty} ${product.name}; raw material used up`,
       textHi: `${a.qty} ${product.nameHi} स्टॉक में जुड़ीं, कच्चा माल घटाया`,
-      consumedMaterialIds: product.recipe.map((r) => r.materialId),
+      consumedMaterialIds,
     };
   }
 }

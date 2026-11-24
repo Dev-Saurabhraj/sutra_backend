@@ -1,6 +1,6 @@
 import type { Repositories } from "../../../data/unit-of-work.js";
 import type { VoiceAction, VoiceActionKind } from "../../../ai/voice-parser.js";
-import type { InvoiceService } from "../../invoices/invoice.service.js";
+import type { InventoryService } from "../../inventory/inventory.service.js";
 import type { ProducerProfile } from "../../producers/producer.repository.js";
 
 export type VoiceCatalog = {
@@ -28,7 +28,7 @@ export type ActionResult = {
 };
 
 export type PreviewContext = { repos: Repositories; producer: ProducerProfile; catalog: VoiceCatalog };
-export type ExecuteContext = PreviewContext & { transcript: string; now: Date; invoices: InvoiceService };
+export type ExecuteContext = PreviewContext & { transcript: string; now: Date; inventory: InventoryService };
 
 /** Command: one handler per voice action kind (Open/Closed — add a kind by adding a handler). */
 export interface VoiceActionHandler {

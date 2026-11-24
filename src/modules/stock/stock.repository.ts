@@ -81,6 +81,60 @@ export class StockRepository {
     return p.stock;
   }
 
+  async createMaterial(data: {
+    producerId: string; supplierId?: string | null; name: string; nameHi: string; unit: string; hsn: string; gstRate: number; costPerUnit: number;
+  }): Promise<string> {
+    const m = await this.db.material.create({ data: { ...data, stock: 0 } });
+    return m.id;
+  }
+
+  async createProduct(data: {
+    producerId: string; slug: string; name: string; nameHi: string; category: string; story: string; price: number; hsn: string;
+    gstRate: number; unitsPerMachinePerWeek: number; palette: string; recipe: RecipeLine[];
+  }): Promise<string> {
+    const { recipe, ...rest } = data;
+    const p = await this.db.product.create({
+      data: { ...rest, mrp: Math.round(rest.price * 1.8), stock: 0, recipe: { create: recipe.map((r) => ({ materialId: r.materialId, qtyPerUnit: r.qtyPerUnit })) } },
+    });
+    return p.id;
+  }
+
+  async materialGst(materialId: string): Promise<{ gstRate: number; hsn: string }> {
+    const m = await this.db.material.findUniqueOrThrow({ where: { id: materialId }, select: { gstRate: true, hsn: true } });
+    return { gstRate: num(m.gstRate), hsn: m.hsn };
+  }
+
+  async setMaterialCost(materialId: string, costPerUnit: number): Promise<void> {
+    await this.db.material.update({ where: { id: materialId }, data: { costPerUnit } });
+  }
+
+  createPurchase(data: {
+    producerId: string; supplierId: string; billNo: string; billDate: Date; taxable: number; cgst: number; sgst: number; igst: number;
+    total: number; gstinValid: boolean; item: { materialId: string; qty: number; rate: number; amount: number };
+  }) {
+    const { item, ...rest } = data;
+    return this.db.purchase.create({ data: { ...rest, source: "APP", items: { create: [item] } } });
+  }
+
+  async movements(producerId: string, filter: { materialId?: string; productId?: string }, take: number) {
+    const rows = await this.db.stockMovement.findMany({
+      where: { producerId, ...filter },
+      orderBy: { createdAt: "desc" },
+      take,
+      include: { material: { select: { name: true, nameHi: true, unit: true } }, product: { select: { name: true, nameHi: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.id, kind: r.kind, qty: num(r.qty), source: r.source, note: r.note, createdAt: r.createdAt,
+      item: r.material ? { name: r.material.name, nameHi: r.material.nameHi, unit: r.material.unit } : { name: r.product?.name ?? "", nameHi: r.product?.nameHi ?? "", unit: "pcs" },
+    }));
+  }
+
+  /** Sum of movement quantities of one kind since a date (e.g. pieces made this week). */
+  async movedSince(producerId: string, kind: MovementKind, since: Date): Promise<number> {
+    const agg = await this.db.stockMovement.aggregate({ where: { producerId, kind, productId: { not: null }, createdAt: { gte: since } }, _sum: { qty: true } });
+    return Math.abs(num(agg._sum.qty));
+  }
+
   async createSupplierOrder(data: { producerId: string; supplierId: string; materialId: string; qty: number; message: string }) {
     return this.db.supplierOrder.create({ data });
   }
