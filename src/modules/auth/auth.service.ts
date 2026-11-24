@@ -30,8 +30,8 @@ export function normalizePhone(raw: string): string {
 }
 
 /** A new number first chooses: I make/sell (producer) or I buy for my business (buyer). */
-export const needsOnboarding = (u: { producerId: string | null; buyerId: string | null; clusterId?: string | null }) =>
-  u.producerId === null && u.buyerId === null && !u.clusterId;
+export const needsOnboarding = (u: { producerId: string | null; buyerId: string | null; clusterId?: string | null; role?: string }) =>
+  u.role !== "CA" && u.producerId === null && u.buyerId === null && !u.clusterId;
 
 export class AuthService {
   constructor(

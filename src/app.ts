@@ -25,6 +25,7 @@ import { CATALOG_FOLDER } from "./modules/catalog/catalog.service.js";
 import { capacityRouter } from "./modules/capacity/capacity.controller.js";
 import { marketRouter } from "./modules/market/market.controller.js";
 import { clusterRouter } from "./modules/cluster/cluster.controller.js";
+import { caRouter, clusterJoinRouter, scaleRouter } from "./modules/scale/scale.controller.js";
 import { whatsappRouter } from "./modules/whatsapp/whatsapp.controller.js";
 import { authenticate, producerIdOf, userIdOf } from "./core/http/authenticate.js";
 
@@ -86,7 +87,10 @@ export function createApp(c: Container): Express {
   secured.use("/catalog", catalogRouter(c.catalog));
   secured.use("/capacity", capacityRouter(c.capacity));
   secured.use("/market", marketRouter(c.market));
+  secured.use("/cluster", clusterJoinRouter(c.scale, c.cluster));
   secured.use("/cluster", clusterRouter(c.cluster));
+  secured.use(scaleRouter(c.scale));
+  secured.use("/ca", caRouter(c.scale, c.gst));
   // C6: schemes the maker may qualify for
   secured.get("/schemes", async (req, res) => res.json(await c.schemes.forProducer(producerIdOf(req))));
   secured.get("/prices", async (req, res) => res.json(await c.prices.report(producerIdOf(req), new Date())));

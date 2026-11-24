@@ -138,6 +138,12 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `GET /api/v1/gst/2b/sample` · `POST /api/v1/gst/2b/reconcile` `{data}` | GSTR-2B reconciliation (X7): portal JSON vs the books → matched, short-filed, not filed (credit at risk), not in books |
 | `GET /api/v1/schemes` | Scheme matcher (C6): government schemes the maker may qualify for, each with why and the official link |
 | `GET /api/v1/cluster/categories` | What this cluster's makers make (for the bulk-order picker) |
+| `GET /api/v1/ondc/catalog` | ONDC (X8): per product what seller apps would reject (photo, description, HSN, MRP, GSTIN) and a Beckn catalog of the ready ones for a seller app to ingest |
+| `GET /api/v1/finance/early-pay` | Invoice finance (X8): unpaid invoices that could be paid early through TReDS (MSME seller, business buyer), with an estimated cost |
+| `GET /api/v1/clusters` · `POST /api/v1/clusters/:id/join` | Multi-cluster: any maker can ask to join a cluster (same trade / state first) |
+| `GET /api/v1/cluster/joins` · `POST /api/v1/cluster/joins/:id` `{approve}` | Cluster admin approves or declines join requests |
+| `GET/POST /api/v1/me/ca` · `DELETE /api/v1/me/ca/:id` | The maker gives a CA read-only GST access by phone number, and can take it back |
+| `GET /api/v1/ca/clients` · `/ca/clients/:id/summary` · `/export.csv` · `/gstr1.json` | CA portal: every client who granted access, this month's GST, issues and files; nothing else, and only while access lasts |
 | `GET /media/catalog/*` | Public catalog photos (nothing else under `uploads/` is served) |
 | `GET /health` | DB check and AI mode |
 

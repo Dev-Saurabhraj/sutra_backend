@@ -18,6 +18,18 @@ enum UserRole {
   PRODUCER
   BUYER
   CLUSTER_ADMIN
+  CA // chartered accountant: read-only GST view of the makers who granted access
+}
+
+enum GrantStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum JoinStatus {
+  PENDING
+  APPROVED
+  DECLINED
 }
 
 enum GstScheme {
@@ -141,6 +153,37 @@ model User {
   consentAt      DateTime?
   createdAt      DateTime       @default(now())
   refreshTokens  RefreshToken[]
+  /// For a CA: display name; makers see who has access.
+  displayName    String?
+  caClients      CaAccess[]
+}
+
+/// A maker lets a CA see their GST (DPDP: explicit, revocable, read-only).
+model CaAccess {
+  id         String      @id @default(cuid())
+  producerId String
+  producer   Producer    @relation(fields: [producerId], references: [id])
+  caUserId   String
+  ca         User        @relation(fields: [caUserId], references: [id])
+  status     GrantStatus @default(ACTIVE)
+  createdAt  DateTime    @default(now())
+  revokedAt  DateTime?
+
+  @@unique([producerId, caUserId])
+}
+
+/// A maker asks to join a cluster; its admin approves (multi-cluster).
+model ClusterJoin {
+  id         String     @id @default(cuid())
+  producerId String
+  producer   Producer   @relation(fields: [producerId], references: [id])
+  clusterId  String
+  cluster    Cluster    @relation(fields: [clusterId], references: [id])
+  status     JoinStatus @default(PENDING)
+  createdAt  DateTime   @default(now())
+  decidedAt  DateTime?
+
+  @@index([clusterId, status])
 }
 
 model OtpChallenge {
@@ -212,6 +255,7 @@ model Cluster {
   industry    Industry   @relation(fields: [industryKey], references: [key])
   producers   Producer[]
   admins      User[]
+  joins       ClusterJoin[]
 }
 
 model Producer {
@@ -262,6 +306,8 @@ model Producer {
   workerPayments WorkerPayment[]
   billScans      BillScan[]
   capacityEvents CapacityEvent[]
+  caAccess       CaAccess[]
+  clusterJoins   ClusterJoin[]
 }
 
 enum AdvanceStatus {

@@ -50,6 +50,9 @@ export class PrivacyService {
         });
         await tx.worker.updateMany({ where: { producerId: user.producerId }, data: { phone: null } });
       }
+      // access grants go with the account, on either side
+      if (user.producerId) await tx.caAccess.updateMany({ where: { producerId: user.producerId }, data: { status: "REVOKED", revokedAt: this.clock.now() } });
+      await tx.caAccess.deleteMany({ where: { caUserId: userId } });
       if (user.buyerId) await tx.buyer.update({ where: { id: user.buyerId }, data: { name: "Deleted account", phone: "" } });
       await tx.refreshToken.deleteMany({ where: { userId } });
       await tx.otpChallenge.deleteMany({ where: { phone: user.phone } });

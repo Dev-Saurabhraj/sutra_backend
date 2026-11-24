@@ -13,6 +13,8 @@ const EnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional().default(""),
   SUTRA_AI: z.string().optional().default(""),
   // WhatsApp Cloud API (P28). Without a number id + token, replies are logged instead of sent.
+  /** Where this API is reachable from outside (catalog photo links in the ONDC catalog). */
+  PUBLIC_BASE_URL: z.string().url().default("http://localhost:4000"),
   WHATSAPP_VERIFY_TOKEN: z.string().optional().default(""),
   WHATSAPP_APP_SECRET: z.string().optional().default(""),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional().default(""),

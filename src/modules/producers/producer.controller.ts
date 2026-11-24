@@ -28,6 +28,7 @@ export function meRouter(repos: Repositories, auth: AuthService, home: HomeServi
       producer,
       buyer,
       cluster,
+      ca: user.role === "CA" ? { name: user.displayName ?? "CA" } : null,
       consentVersion: CONSENT_VERSION,
     });
   });

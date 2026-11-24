@@ -45,6 +45,7 @@ import { ClusterService } from "./modules/cluster/cluster.service.js";
 import { CloudWhatsAppSender, LogWhatsAppSender, WhatsAppBot, type WhatsAppSender } from "./modules/whatsapp/whatsapp.js";
 import { PrivacyService } from "./modules/privacy/privacy.service.js";
 import { SchemeService } from "./modules/schemes/scheme.service.js";
+import { ScaleService } from "./modules/scale/scale.service.js";
 
 export type Container = {
   env: Env;
@@ -74,6 +75,7 @@ export type Container = {
   whatsapp: WhatsAppBot;
   privacy: PrivacyService;
   schemes: SchemeService;
+  scale: ScaleService;
   uploadsDir: string;
 };
 
@@ -120,10 +122,11 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
     : new LogWhatsAppSender(logger);
   const whatsapp = new WhatsAppBot(repos, voice, waSender);
   const privacy = new PrivacyService(prisma, clock);
+  const scale = new ScaleService(prisma, repos, gst, clock, env.PUBLIC_BASE_URL);
   const catalog = new CatalogService(repos, storyWriter, new SharpImageCleaner(), files);
   const onboarding = new OnboardingService(repos, uow, auth, clock);
 
   registerLowStockWatcher(bus, stock, repos.alerts);
 
-  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst, orders, catalog, capacity, market, prices, cluster, whatsapp, privacy, schemes, uploadsDir };
+  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst, orders, catalog, capacity, market, prices, cluster, whatsapp, privacy, schemes, scale, uploadsDir };
 }

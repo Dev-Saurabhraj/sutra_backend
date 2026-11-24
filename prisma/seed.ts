@@ -39,7 +39,7 @@ function nextInvoice(producerId: string, businessName: string, kind: "TAX" | "PR
 }
 
 /** Demo phone numbers: makers +91 98000 000NN, buyers +91 97000 000NN. Everything else is a real account. */
-const DEMO_PHONE = /^\+91(98|97|96)000000\d\d$/;
+const DEMO_PHONE = /^\+91(98|97|96|95)000000\d\d$/;
 
 async function reset() {
   // Never wipe accounts people made themselves (their onboarding, stock, khata) by accident.
@@ -54,7 +54,7 @@ async function reset() {
     process.exit(1);
   }
   const tables = [
-    "CapacityEvent", "WorkerPayment", "WorkEntry", "Worker", "VoiceEntry", "Message", "Alert", "LedgerEntry", "Invoice", "Order", "SupplierOrder", "PurchaseItem", "Purchase",
+    "CaAccess", "ClusterJoin", "CapacityEvent", "WorkerPayment", "WorkEntry", "Worker", "VoiceEntry", "Message", "Alert", "LedgerEntry", "Invoice", "Order", "SupplierOrder", "PurchaseItem", "Purchase",
     "StockMovement", "RecipeItem", "Product", "Material", "RefreshToken", "OtpChallenge", "IdempotencyRecord", "User",
     "Buyer", "Supplier", "Producer", "Cluster", "Industry", "Counter",
   ];
@@ -221,6 +221,20 @@ async function main() {
     // The Chanderi cooperative's secretary sees the cluster dashboard
     const chanderiCluster = await db.cluster.findUniqueOrThrow({ where: { slug: "chanderi" } });
     await db.user.create({ data: { phone: "+919600000001", role: "CLUSTER_ADMIN", clusterId: chanderiCluster.id, language: "hi" } });
+    // An exporter's unpaid tax invoice: something Rohit could get paid early on through TReDS
+    {
+      const r = await db.producer.findUniqueOrThrow({ where: { slug: "rohit" } });
+      const inv = await db.invoice.findFirst({ where: { producerId: r.id, kind: "TAX", buyerName: { startsWith: "Hastkala" } }, orderBy: { issuedAt: "desc" } });
+      if (inv) {
+        await db.ledgerEntry.create({ data: { producerId: r.id, party: inv.buyerName, direction: "RECEIVE", amount: inv.total, note: `Invoice ${inv.number}`, invoiceNo: inv.number, dueDate: daysAhead(38) } });
+      }
+    }
+    // A chartered accountant three makers gave read-only GST access to
+    const ca = await db.user.create({ data: { phone: "+919500000001", role: "CA", displayName: "CA Meera Joshi", language: "en" } });
+    for (const slug of ["rohit", "abdul", "kamla"]) {
+      const p = await db.producer.findUniqueOrThrow({ where: { slug } });
+      await db.caAccess.create({ data: { producerId: p.id, caUserId: ca.id } });
+    }
     // Kaveri Boutique (Bengaluru) and Neel Textiles (Jaipur) can log in as buyers
     for (const biz of ["Kaveri Boutique", "Neel Textiles"]) {
       const b = buyerBy(biz);
