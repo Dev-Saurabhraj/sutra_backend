@@ -52,7 +52,7 @@ export class CatalogService {
       image = { base64: clean.bytes.toString("base64"), mediaType: clean.mediaType };
     }
     const story = await this.writer.write({
-      note: input.note, category: product.category, maker: producer.businessName, place: producer.city, industry: producer.industry.name, image,
+      name: product.name, note: input.note, category: product.category, maker: producer.businessName, place: producer.city, industry: producer.industry.name, image,
     });
     return { productId, imageUrl, ...story };
   }

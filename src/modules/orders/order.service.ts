@@ -92,6 +92,9 @@ export class OrderService {
     const producer = await this.producer(producerId);
     const order = await this.order(producerId, code);
     const to = this.transition(order, "dispatch");
+    if (order.product.stock < order.qty) {
+      throw AppError.conflict("NOT_READY", `Only ${order.product.stock} of ${order.qty} pieces are in stock. Record what was made first, then dispatch.`);
+    }
     const photo = input.photo
       ? await this.files.save(`dispatch-${producerId}`, Buffer.from(input.photo.base64, "base64"), input.photo.mediaType.split("/")[1] ?? "jpg")
       : null;

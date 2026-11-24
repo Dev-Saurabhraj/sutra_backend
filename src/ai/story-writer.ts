@@ -12,6 +12,8 @@ export const StorySchema = z.object({
 export type Story = z.infer<typeof StorySchema>;
 
 export type StoryInput = {
+  /** The product's current name (the template keeps it; Claude may improve it). */
+  name: string;
   note: string;
   category: string;
   maker: string;
@@ -32,7 +34,7 @@ export class TemplateStoryWriter implements StoryWriter {
     const note = /[ऀ-ॿ]/.test(i.note) ? "" : i.note.trim().replace(/[.\s]+$/, "");
     return {
       writer: "template",
-      title: `${i.category} by ${i.maker}`,
+      title: i.name,
       story:
         `Made by hand in ${i.place} by ${i.maker}. ${note ? `In the maker's words: ${note}. ` : ""}` +
         "Each piece is finished and checked before dispatch, so small variations are part of its character. " +
@@ -60,7 +62,7 @@ export class ClaudeStoryWriter implements StoryWriter {
       if (i.image) content.push({ type: "image", source: { type: "base64", media_type: i.image.mediaType, data: i.image.base64 } });
       content.push({
         type: "text",
-        text: `Category: ${i.category}\nIndustry: ${i.industry}\nMaker: ${i.maker}, ${i.place}\nMaker's note (may be Hindi): "${i.note}"\nWrite the catalog entry.`,
+        text: `Current name: ${i.name}\nCategory: ${i.category}\nIndustry: ${i.industry}\nMaker: ${i.maker}, ${i.place}\nMaker's note (may be Hindi): "${i.note}"\nWrite the catalog entry.`,
       });
       const res = await this.client.beta.messages.parse({
         model: CLAUDE_MODEL,

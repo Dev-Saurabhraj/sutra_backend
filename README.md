@@ -102,7 +102,7 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `GET /api/v1/orders?tab=new\|active\|done` | Orders inbox with counts per tab and the last message |
 | `GET /api/v1/orders/:code` | Order + allowed actions + live "can I deliver?" (stock, looms, other orders, material lead times) + price floor (recipe + piece wage) + chat + invoices |
 | `POST /api/v1/orders/:code/respond` `{accept}` | Accept (promises what the simulation says) or decline, with a message to the buyer |
-| `POST /api/v1/orders/:code/dispatch` `{transporter?, lrNumber?, photo?}` | Stock out, tax invoice / bill of supply, money to collect, proof of dispatch (wrong stage → 409) |
+| `POST /api/v1/orders/:code/dispatch` `{transporter?, lrNumber?, photo?}` | Stock out, tax invoice / bill of supply, money to collect, proof of dispatch (wrong stage → 409 `WRONG_STAGE`; fewer pieces in stock than ordered → 409 `NOT_READY`) |
 | `GET /api/v1/orders/:code/dispatch-photo` | The proof photo |
 | `POST /api/v1/orders/:code/deliver` | Delivered; updates orders done and the on-time rate |
 | `POST /api/v1/orders/:code/messages` `{text}` | Write in Hindi; the buyer gets English (original always kept; marked untranslated when AI is off) |
