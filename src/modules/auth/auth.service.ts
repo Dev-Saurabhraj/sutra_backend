@@ -15,7 +15,10 @@ export type Session = {
   accessToken: string;
   refreshToken: string;
   expiresInSec: number;
-  user: { id: string; phone: string; role: string; producerId: string | null; language: string; needsConsent: boolean; needsOnboarding: boolean };
+  user: {
+    id: string; phone: string; role: string; producerId: string | null; buyerId: string | null; language: string;
+    needsConsent: boolean; needsOnboarding: boolean;
+  };
 };
 
 /** India mobile numbers → E.164. Accepts "98000 00001", "+91-98000-00001", "09800000001". */
@@ -25,6 +28,9 @@ export function normalizePhone(raw: string): string {
   if (!/^[6-9]\d{9}$/.test(local)) throw AppError.badRequest("BAD_PHONE", "Enter a 10-digit Indian mobile number");
   return `+91${local}`;
 }
+
+/** A new number first chooses: I make/sell (producer) or I buy for my business (buyer). */
+export const needsOnboarding = (u: { producerId: string | null; buyerId: string | null }) => u.producerId === null && u.buyerId === null;
 
 export class AuthService {
   constructor(
@@ -96,17 +102,19 @@ export class AuthService {
     await this.repo.recordConsent(userId, version, this.clock.now());
   }
 
-  private async issueSession(user: { id: string; phone: string; role: string; producerId: string | null; language: string; consentVersion: string | null }): Promise<Session> {
+  private async issueSession(user: {
+    id: string; phone: string; role: string; producerId: string | null; buyerId: string | null; language: string; consentVersion: string | null;
+  }): Promise<Session> {
     const { token, hash } = this.tokens.newRefreshToken();
     await this.repo.createRefreshToken({ userId: user.id, tokenHash: hash, expiresAt: addDays(this.clock.now(), REFRESH_TTL_DAYS) });
     return {
-      accessToken: this.tokens.signAccess({ sub: user.id, pid: user.producerId, role: user.role }),
+      accessToken: this.tokens.signAccess({ sub: user.id, pid: user.producerId, bid: user.buyerId, role: user.role }),
       refreshToken: token,
       expiresInSec: ACCESS_TTL_SEC,
       user: {
-        id: user.id, phone: user.phone, role: user.role, producerId: user.producerId, language: user.language,
+        id: user.id, phone: user.phone, role: user.role, producerId: user.producerId, buyerId: user.buyerId, language: user.language,
         needsConsent: user.consentVersion !== CONSENT_VERSION,
-        needsOnboarding: user.producerId === null,
+        needsOnboarding: needsOnboarding(user),
       },
     };
   }

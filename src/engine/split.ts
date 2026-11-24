@@ -4,10 +4,19 @@ export type SplitCandidate = { producerId: string; productId: string; capacityBy
 export type SplitRow = SplitCandidate & { assigned: number };
 export type SplitResult = { rows: SplitRow[]; totalCapacity: number; covered: number; qty: number };
 
-export function splitByCapacity(candidates: SplitCandidate[], qty: number, preferProducerId?: string): SplitResult {
-  const rows: SplitRow[] = candidates
+/**
+ * @param maxMakers keep at most this many makers (the preferred one plus the biggest others): a buyer would rather
+ *   deal with 3 makers than 9. Omit for a cluster admin's fair share across everyone.
+ */
+export function splitByCapacity(candidates: SplitCandidate[], qty: number, preferProducerId?: string, maxMakers?: number): SplitResult {
+  let rows: SplitRow[] = candidates
     .map((c) => ({ ...c, assigned: 0 }))
     .sort((a, b) => b.capacityByDate - a.capacityByDate);
+  if (maxMakers && rows.length > maxMakers) {
+    const pref = rows.find((r) => r.producerId === preferProducerId);
+    const rest = rows.filter((r) => r !== pref).slice(0, pref ? maxMakers - 1 : maxMakers);
+    rows = pref ? [pref, ...rest] : rest;
+  }
   const totalCapacity = rows.reduce((a, r) => a + r.capacityByDate, 0);
   let left = qty;
 

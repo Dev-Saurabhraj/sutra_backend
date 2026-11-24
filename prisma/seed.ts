@@ -40,7 +40,7 @@ function nextInvoice(producerId: string, businessName: string, kind: "TAX" | "PR
 
 async function reset() {
   const tables = [
-    "WorkerPayment", "WorkEntry", "Worker", "VoiceEntry", "Message", "Alert", "LedgerEntry", "Invoice", "Order", "SupplierOrder", "PurchaseItem", "Purchase",
+    "CapacityEvent", "WorkerPayment", "WorkEntry", "Worker", "VoiceEntry", "Message", "Alert", "LedgerEntry", "Invoice", "Order", "SupplierOrder", "PurchaseItem", "Purchase",
     "StockMovement", "RecipeItem", "Product", "Material", "RefreshToken", "OtpChallenge", "IdempotencyRecord", "User",
     "Buyer", "Supplier", "Producer", "Cluster", "Industry", "Counter",
   ];
@@ -196,10 +196,35 @@ async function main() {
   }
 
   await rohitExtras();
+  await marketExtras();
 
   await db.counter.createMany({
     data: [{ key: "order", value: orderNo }, ...[...counters.entries()].map(([key, value]) => ({ key, value }))],
   });
+
+  /** Phase 5: buyer logins, quality marks on the trust profile, and Rohit's capacity calendar. */
+  async function marketExtras() {
+    // Kaveri Boutique (Bengaluru) and Neel Textiles (Jaipur) can log in as buyers
+    for (const biz of ["Kaveri Boutique", "Neel Textiles"]) {
+      const b = buyerBy(biz);
+      await db.user.create({ data: { phone: b.phone, role: "BUYER", buyerId: b.id, language: "en" } });
+    }
+    const marks: Record<string, string[]> = {
+      rohit: ["HANDLOOM_MARK", "GI_CHANDERI"], abdul: ["HANDLOOM_MARK", "GI_CHANDERI", "SILK_MARK"], mohan: ["GI_CHANDERI"],
+      rukhsana: ["GI_CHANDERI"], gopal: ["HANDLOOM_MARK"], salim: ["GI_MORADABAD_METAL"], rajesh: ["GI_MORADABAD_METAL"],
+    };
+    for (const [slug, m] of Object.entries(marks)) await db.producer.update({ where: { slug }, data: { marks: m } });
+
+    const rohit = await db.producer.findUniqueOrThrow({ where: { slug: "rohit" } });
+    const day = (d: number) => new Date(new Date(NOW + d * DAY).toISOString().slice(0, 10));
+    await db.capacityEvent.createMany({
+      data: [
+        { producerId: rohit.id, kind: "REPAIR", startsOn: day(2), endsOn: day(3), machinesOff: 1, note: "Loom 4: new reed" },
+        { producerId: rohit.id, kind: "WEDDING", startsOn: day(7), endsOn: day(12), machinesOff: 3, note: "Wedding in the mohalla: 3 weavers away" },
+        { producerId: rohit.id, kind: "FESTIVAL", startsOn: day(30), endsOn: day(31), machinesOff: 12, note: "Festival: all looms closed" },
+      ],
+    });
+  }
 
   async function buildProducer(
     producer: { id: string; businessName: string; state: string; machines: number; joinedAt: Date; agentCutPct: number; gstScheme: GstScheme },
@@ -447,7 +472,7 @@ async function main() {
     producers: await db.producer.count(), users: await db.user.count(), products: await db.product.count(),
     orders: await db.order.count(), invoices: await db.invoice.count(), movements: await db.stockMovement.count(),
   };
-  console.log("Seeded", counts, "\nDemo login: +919800000001 (Rohit) with the DEV_OTP from .env");
+  console.log("Seeded", counts, "\nDemo login: +919800000001 (Rohit, maker) or +919700000001 (Kaveri Boutique, buyer) with the DEV_OTP from .env");
 }
 
 main()

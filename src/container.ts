@@ -36,6 +36,9 @@ import { ClaudeStoryWriter, TemplateStoryWriter, type StoryWriter } from "./ai/s
 import { OrderService } from "./modules/orders/order.service.js";
 import { CatalogService } from "./modules/catalog/catalog.service.js";
 import { SharpImageCleaner } from "./modules/catalog/image-cleaner.js";
+import { QuoteService } from "./modules/quotes/quote.service.js";
+import { CapacityService } from "./modules/capacity/capacity.service.js";
+import { MarketService } from "./modules/market/market.service.js";
 
 export type Container = {
   env: Env;
@@ -58,6 +61,8 @@ export type Container = {
   gst: GstService;
   orders: OrderService;
   catalog: CatalogService;
+  capacity: CapacityService;
+  market: MarketService;
   uploadsDir: string;
 };
 
@@ -91,11 +96,14 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
   const bills = new BillService(repos, uow, billReader, files, clock, env.aiEnabled);
   const translator: Translator = env.aiEnabled ? new ClaudeTranslator(env.ANTHROPIC_API_KEY, logger) : new NoTranslator();
   const storyWriter: StoryWriter = env.aiEnabled ? new ClaudeStoryWriter(env.ANTHROPIC_API_KEY, logger) : new TemplateStoryWriter();
-  const orders = new OrderService(repos, uow, inventory, translator, files, clock);
+  const quotes = new QuoteService(repos, clock);
+  const orders = new OrderService(repos, uow, inventory, translator, quotes, files, clock);
+  const capacity = new CapacityService(repos, quotes, clock);
+  const market = new MarketService(repos, uow, quotes, invoices, translator, files, clock);
   const catalog = new CatalogService(repos, storyWriter, new SharpImageCleaner(), files);
   const onboarding = new OnboardingService(repos, uow, auth, clock);
 
   registerLowStockWatcher(bus, stock, repos.alerts);
 
-  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst, orders, catalog, uploadsDir };
+  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst, orders, catalog, capacity, market, uploadsDir };
 }

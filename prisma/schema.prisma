@@ -235,6 +235,8 @@ model Producer {
   onTimeRate   Float     @default(0.9)
   ordersDone   Int       @default(0)
   agentCutPct  Float     @default(25)
+  /// Quality marks the maker holds, e.g. HANDLOOM_MARK, GI_CHANDERI, CRAFTMARK (shown on the trust profile)
+  marks        String[]  @default([])
 
   user           User?
   materials      Material[]
@@ -254,6 +256,32 @@ model Producer {
   workEntries    WorkEntry[]
   workerPayments WorkerPayment[]
   billScans      BillScan[]
+  capacityEvents CapacityEvent[]
+}
+
+enum CapacityKind {
+  HOLIDAY
+  FESTIVAL
+  WEDDING
+  POWER_CUT
+  ABSENCE
+  REPAIR
+  OTHER
+}
+
+/// A stretch of days when fewer machines run. Quotes count it, so promises stay honest (P24).
+model CapacityEvent {
+  id          String       @id @default(cuid())
+  producerId  String
+  producer    Producer     @relation(fields: [producerId], references: [id])
+  kind        CapacityKind
+  startsOn    DateTime     @db.Date
+  endsOn      DateTime     @db.Date
+  machinesOff Int
+  note        String?
+  createdAt   DateTime     @default(now())
+
+  @@index([producerId, endsOn])
 }
 
 model Supplier {

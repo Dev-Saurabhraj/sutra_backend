@@ -54,6 +54,7 @@ prisma/                    schema.prisma, seed.ts
 | Domain service shared by channels | `InventoryService.*In(repos, …)` | Voice entries and app taps run the same produce/sell/stock-in code inside one transaction |
 | Derived ledger | `labour/wages.ts` | Wage due and advance pending are computed from append-only entries; the 50% rule is a pure, tested function |
 | Template / data-driven config | `onboarding/industry-templates.ts` | A new industry is data, not code |
+| Shared domain service | `quotes/quote.service.ts` | One "can I deliver?" for the maker's order screen, the buyer's instant quote, the badge and the late-order check |
 | State machine | `engine/order-flow.ts` | Order stages and allowed moves in one pure table; services ask it, never hard-code statuses |
 | Strategy + fallback | `ai/translator.ts`, `ai/story-writer.ts`, `catalog/image-cleaner.ts` | Chat translation, catalog stories and photo clean-up each have an offline implementation |
 | Composition root / DI | `container.ts` | Constructor injection everywhere; no hidden singletons |
@@ -109,6 +110,16 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `GET /api/v1/catalog` | Products with unit cost, margin at list price, published / ready |
 | `POST /api/v1/catalog/:id/draft` `{note, photo?}` | Clean the photo (square, straightened, even light) and draft an honest English story; nothing is published |
 | `PATCH /api/v1/catalog/:id` `{name?, story?, price?, published?, acceptBelowCost?}` | Save the listing; publishing below cost needs `acceptBelowCost` (409 `BELOW_COST`) |
+| `GET /api/v1/capacity` | Capacity calendar (P24): next 6 weeks as machines working per day, events, machine-days lost |
+| `POST /api/v1/capacity` `{kind, startsOn, endsOn, machinesOff?, note?}` | Add downtime (holiday = all machines unless said); returns accepted orders it now makes late, each with an alert |
+| `DELETE /api/v1/capacity/:id` | Remove an entry |
+| `GET /api/v1/market/products?q&industry&cluster&category&maxPrice` | Browse (B1) with facets; every card has the "Can Deliver" badge (B2): ready after other orders + pieces per week after downtime |
+| `GET /api/v1/market/products/:id` · `GET /api/v1/market/makers/:slug` | Product page and trust profile (B7): GSTIN with format check, scheme, Udyam yes/no, quality marks, orders done, on-time rate, since |
+| `POST /api/v1/market/quote` `{productId, qty, wantedBy}` | Instant quote (B3) from the same engine the maker sees, GST for the buyer's state, and a cluster split (B4, max 4 registered makers) when one maker can't make the date |
+| `POST /api/v1/market/requests` `{…quote, note?, split}` | Buyer only: order per maker, a proforma each (B5), the note translated to Hindi, an alert to each maker |
+| `GET /api/v1/market/orders` · `/orders/:code` · `POST /orders/:code/messages` | Tracking (B6): stages, the rest of a split request, letters (maker's Hindi shown in English) |
+| `GET /api/v1/market/orders/:code/dispatch-photo` · `GET /api/v1/market/invoices/:id/pdf` | Proof of dispatch and documents, scoped to the buyer's own orders |
+| `POST /api/v1/onboarding/buyer` `{name, business, city, state, gstin?}` | Buyer account (GSTIN checked against the state); the new session carries `buyerId` |
 | `GET /media/catalog/*` | Public catalog photos (nothing else under `uploads/` is served) |
 | `GET /health` | DB check and AI mode |
 

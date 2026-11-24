@@ -44,6 +44,45 @@ export class InvoiceService {
     return inv;
   }
 
+  /** A buyer downloads an invoice on their own order. */
+  async pdfForBuyer(buyerId: string, id: string): Promise<{ filename: string; bytes: Buffer }> {
+    const inv = await this.invoices.findForBuyer(buyerId, id);
+    if (!inv) throw AppError.notFound("Invoice");
+    const seller = await this.producers.findProfile(inv.producerId);
+    if (!seller) throw AppError.notFound("Producer");
+    return { filename: `${inv.number.replace(/\//g, "-")}.pdf`, bytes: await this.pdf.render(inv, seller) };
+  }
+
+  /**
+   * Proforma sent with a marketplace request (B5): same tax rules as the final invoice, its own number series,
+   * no stock or money moves. Refuses a sale the seller's GST scheme does not allow.
+   */
+  async issueProforma(repos: Repositories, input: SaleInvoiceInput): Promise<InvoiceRecord> {
+    const decision = decideSaleDocument(input.producer.gstScheme, input.producer.state, input.buyer.state);
+    if (!decision.allowed) throw new AppError(422, "SALE_NOT_ALLOWED", decision.reasonEn, { reasonHi: decision.reasonHi });
+    const fy = financialYear(input.at);
+    const seq = await repos.counters.next(`inv:${input.producer.id}:PROFORMA:${fy.label}`);
+    const taxable = input.qty * input.rate;
+    const tax = decision.chargesTax ? splitTax(taxable, input.item.gstRate, input.producer.state, input.buyer.state) : noTax(taxable);
+    return repos.invoices.create({
+      producerId: input.producer.id,
+      number: invoiceNumber(businessPrefix(input.producer.businessName), "PROFORMA", fy.short, seq),
+      financialYear: fy.label,
+      kind: "PROFORMA",
+      orderId: input.orderId ?? null,
+      buyerName: input.buyer.name,
+      buyerGstin: input.buyer.gstin,
+      buyerState: input.buyer.state,
+      itemName: input.item.name,
+      hsn: input.item.hsn,
+      qty: input.qty,
+      rate: input.rate,
+      gstRate: decision.chargesTax ? input.item.gstRate : 0,
+      ...tax,
+      issuedAt: input.at,
+    });
+  }
+
   /** Must run inside a unit of work so the number, the invoice and the stock change commit together. */
   async issueForSale(repos: Repositories, input: SaleInvoiceInput): Promise<InvoiceRecord> {
     const decision = decideSaleDocument(input.producer.gstScheme, input.producer.state, input.buyer.state);

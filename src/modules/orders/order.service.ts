@@ -5,9 +5,9 @@ import type { Repositories, UnitOfWork } from "../../data/unit-of-work.js";
 import type { Translator } from "../../ai/translator.js";
 import { availableActions, deliveredOnTime, nextStatus, updatedOnTimeRate, type OrderAction, type OrderStatusKind } from "../../engine/order-flow.js";
 import { margin, unitCost } from "../../engine/pricing.js";
-import { quote } from "../../engine/quote.js";
 import { stateForCity } from "../../shared/gst/states.js";
-import { addDays, shortDate, type Clock } from "../../shared/time.js";
+import { shortDate, type Clock } from "../../shared/time.js";
+import type { QuoteService } from "../quotes/quote.service.js";
 import type { InventoryService, SaleBuyer } from "../inventory/inventory.service.js";
 import type { ProducerProfile } from "../producers/producer.repository.js";
 import type { OrderRow } from "./order.repository.js";
@@ -18,7 +18,6 @@ const TABS: Record<OrderTab, OrderStatus[]> = {
   active: ["CONFIRMED", "IN_PRODUCTION", "DISPATCHED"],
   done: ["DELIVERED", "DECLINED"],
 };
-const DEFAULT_WANTED_DAYS = 14;
 
 export type DispatchInput = { transporter?: string; lrNumber?: string; photo?: { base64: string; mediaType: string } };
 
@@ -29,6 +28,7 @@ export class OrderService {
     private readonly uow: UnitOfWork,
     private readonly inventory: InventoryService,
     private readonly translator: Translator,
+    private readonly quotes: QuoteService,
     private readonly files: FileStore,
     private readonly clock: Clock,
   ) {}
@@ -45,11 +45,12 @@ export class OrderService {
   async detail(producerId: string, code: string) {
     const producer = await this.producer(producerId);
     const order = await this.order(producerId, code);
-    const [canDeliver, price, messages, invoices] = await Promise.all([
+    const [canDeliver, price, messages, invoices, group] = await Promise.all([
       this.canDeliver(producer, order),
       this.priceCheck(producerId, order),
       this.repos.orders.messages(order.id),
       this.repos.orders.invoices(order.id),
+      order.parentCode ? this.repos.orders.group(order.parentCode) : Promise.resolve([]),
     ]);
     return {
       order,
@@ -61,6 +62,8 @@ export class OrderService {
         translated: m.sender === "BUYER" ? !!m.textHi && m.textHi !== m.text : !!m.textEn && m.textEn !== m.text,
       })),
       invoices: invoices.map((i) => ({ ...i, total: Number(i.total) })),
+      // a buyer's request shared across makers: who else is making the rest
+      group: group.filter((g) => g.code !== order.code).map((g) => ({ code: g.code, qty: g.qty, status: g.status, maker: g.producer.businessName })),
     };
   }
 
@@ -147,25 +150,10 @@ export class OrderService {
 
   // ---------------------------------------------------------------- helpers
 
-  /** Live simulation: stock, machines, other open orders, material lead times. */
+  /** Live answer from the shared quote service (stock, machines, other orders, lead times, capacity calendar). */
   private async canDeliver(producer: ProducerProfile, order: OrderRow) {
     if (!["QUOTED", "CONFIRMED", "IN_PRODUCTION"].includes(order.status)) return null;
-    const product = await this.repos.stock.recipeDetails(producer.id, order.product.id);
-    if (!product) return null;
-    const now = this.clock.now();
-    const q = quote({
-      product: { id: product.id, name: product.name, stock: product.stock, unitsPerMachinePerWeek: product.unitsPerMachinePerWeek, recipe: product.recipe },
-      machines: producer.machines,
-      openOrders: await this.repos.orders.openLoads(producer.id, order.id),
-      qty: order.qty,
-      wantedBy: order.wantedBy ?? addDays(now, DEFAULT_WANTED_DAYS),
-      now,
-    });
-    return {
-      qty: q.qty, wantedBy: q.wantedBy, ready: q.ready, perDay: Math.round(q.perDay * 100) / 100, backlogDays: Math.round(q.backlogDays * 10) / 10,
-      qtyByWanted: q.qtyByWanted, fullDate: q.fullDate, canMeet: q.canMeet, shortfalls: q.shortfalls,
-      curve: q.curve.filter((_, i) => i % 2 === 0 || i === q.curve.length - 1),
-    };
+    return this.quotes.forProduct(producer, order.product.id, order.qty, order.wantedBy, order.id);
   }
 
   /** Price floor: materials by recipe at latest rates + piece wages, against the order's rate. */

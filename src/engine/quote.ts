@@ -2,6 +2,7 @@
 // open orders and raw-material lead times. Pure: no database, `now` is injected.
 import { addDays, DAY_MS } from "../shared/time.js";
 import { roundQty } from "./reorder.js";
+import { workingShare, type Downtime } from "./capacity.js";
 
 /** Share of machines promised to a new order; the rest keeps regular customers served. */
 export const ALLOCATION = 0.8;
@@ -28,6 +29,8 @@ export type QuoteInput = {
   qty: number;
   wantedBy: Date;
   now: Date;
+  /** Days with machines off (capacity calendar). Omitted = every machine every day. */
+  downtime?: Downtime[];
 };
 
 export type Shortfall = {
@@ -71,11 +74,16 @@ export function quote(input: QuoteInput): Quote {
   let made = 0;
   let fullDay: number | null = toMake === 0 ? 0 : null;
   let qtyByWanted = Math.min(qty, ready);
+  // Other orders are worked off first, in full-machine days; downtime slows both.
+  let backlogLeft = backlogDays;
 
   for (let d = 1; d <= MAX_SIM_DAYS; d++) {
-    const working = d > backlogDays;
+    let share = workingShare(input.downtime, machines, d);
+    const toBacklog = Math.min(backlogLeft, share);
+    backlogLeft -= toBacklog;
+    share -= toBacklog;
     const materialBlocked = made >= unitsFromStock && d <= resumeDay;
-    if (working && !materialBlocked && made < toMake) made = Math.min(toMake, made + perDay);
+    if (share > 0 && !materialBlocked && made < toMake) made = Math.min(toMake, made + perDay * share);
     const total = Math.min(qty, Math.floor(ready + made));
     if (d <= wantedDay) qtyByWanted = total;
     if (fullDay === null && total >= qty) fullDay = d;

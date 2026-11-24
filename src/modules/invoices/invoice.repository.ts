@@ -42,6 +42,12 @@ export class InvoiceRepository {
     return row ? toRecord(row) : null;
   }
 
+  /** An invoice on one of this buyer's orders, with the seller it belongs to (buyers read, never write). */
+  async findForBuyer(buyerId: string, id: string): Promise<(InvoiceRecord & { producerId: string }) | null> {
+    const row = await this.db.invoice.findFirst({ where: { id, order: { buyerId } } });
+    return row ? { ...toRecord(row), producerId: row.producerId } : null;
+  }
+
   /** Taxable sales (tax invoices + bills of supply) since a date. */
   async salesSince(producerId: string, since: Date): Promise<{ taxable: number; count: number }> {
     const agg = await this.db.invoice.aggregate({

@@ -5,7 +5,8 @@ import { AppError } from "../../core/errors.js";
 export const ACCESS_TTL_SEC = 15 * 60;
 export const REFRESH_TTL_DAYS = 30;
 
-export type AccessClaims = { sub: string; pid: string | null; role: string };
+/** pid: the producer the user acts for; bid: the buyer business (marketplace accounts). */
+export type AccessClaims = { sub: string; pid: string | null; bid: string | null; role: string };
 
 /** Signs and verifies tokens; hashes secrets before they touch the database (RULES A7). */
 export class TokenService {
@@ -22,7 +23,12 @@ export class TokenService {
     try {
       const payload = jwt.verify(token, this.accessSecret, { issuer: "sutra" });
       if (typeof payload === "string" || typeof payload.sub !== "string") throw new Error("bad payload");
-      return { sub: payload.sub, pid: (payload.pid as string | null) ?? null, role: String(payload.role) };
+      return {
+        sub: payload.sub,
+        pid: (payload.pid as string | null) ?? null,
+        bid: (payload.bid as string | null) ?? null,
+        role: String(payload.role),
+      };
     } catch {
       throw AppError.unauthorized();
     }

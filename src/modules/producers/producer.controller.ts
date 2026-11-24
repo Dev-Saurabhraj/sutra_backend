@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AppError } from "../../core/errors.js";
 import { producerIdOf, userIdOf } from "../../core/http/authenticate.js";
 import { parse } from "../../core/http/validate.js";
-import { CONSENT_VERSION, type AuthService } from "../auth/auth.service.js";
+import { CONSENT_VERSION, needsOnboarding, type AuthService } from "../auth/auth.service.js";
 import type { Repositories } from "../../data/unit-of-work.js";
 import type { HomeService } from "./home.service.js";
 
@@ -18,12 +18,14 @@ export function meRouter(repos: Repositories, auth: AuthService, home: HomeServi
     if (!user) throw AppError.unauthorized();
     // From the database, not the token: the token may predate onboarding.
     const producer = user.producerId ? await repos.producers.findProfile(user.producerId) : null;
+    const buyer = user.buyerId ? await repos.market.buyer(user.buyerId) : null;
     res.json({
       user: {
         id: user.id, phone: user.phone, role: user.role, language: user.language,
-        needsConsent: user.consentVersion !== CONSENT_VERSION, needsOnboarding: user.producerId === null,
+        needsConsent: user.consentVersion !== CONSENT_VERSION, needsOnboarding: needsOnboarding(user),
       },
       producer,
+      buyer,
       consentVersion: CONSENT_VERSION,
     });
   });

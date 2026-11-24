@@ -84,6 +84,24 @@ export const OnboardingInput = z
   });
 export type OnboardingInputT = z.infer<typeof OnboardingInput>;
 
+/** A shop, boutique or exporter buying from makers: four facts, nothing else. */
+export const BuyerOnboardingInput = z
+  .object({
+    name: z.string().trim().min(2).max(80),
+    business: z.string().trim().min(2).max(80),
+    city: z.string().trim().min(2).max(40),
+    state: z.string().refine((s) => s in STATE_CODES, "Choose a state from the list"),
+    gstin: z.string().trim().toUpperCase().optional().or(z.literal("").transform(() => undefined)),
+    language: z.enum(["hi", "en"]).default("en"),
+  })
+  .superRefine((b, ctx) => {
+    if (!b.gstin) return;
+    const g = validateGstin(b.gstin);
+    if (!g.valid) ctx.addIssue({ code: "custom", path: ["gstin"], message: g.reason ?? "This GSTIN is not valid" });
+    else if (g.state && g.state !== b.state) ctx.addIssue({ code: "custom", path: ["gstin"], message: `This GSTIN is registered in ${g.state}` });
+  });
+export type BuyerOnboardingInputT = z.infer<typeof BuyerOnboardingInput>;
+
 /** Creates a whole business from one onboarding form: profile, suppliers, materials, products with recipes, workers. */
 export class OnboardingService {
   constructor(
@@ -114,6 +132,18 @@ export class OnboardingService {
       await this.createProducts(repos, producer.id, input, materialIds);
       for (const w of input.workers) await repos.labour.createWorker({ ...w, producerId: producer.id, phone: w.phone ?? null });
       await repos.auth.linkProducer(userId, producer.id, input.language);
+    });
+    return this.auth.sessionFor(userId);
+  }
+
+  /** Buyer account: links the phone to a buyer business; the session then carries the buyer id. */
+  async completeBuyer(userId: string, input: BuyerOnboardingInputT): Promise<Session> {
+    const user = await this.repos.auth.findUserById(userId);
+    if (!user) throw AppError.unauthorized();
+    if (user.producerId || user.buyerId) throw AppError.conflict("ALREADY_ONBOARDED", "This account is already set up");
+    await this.uow.run(async (repos) => {
+      const buyer = await repos.market.createBuyer({ name: input.name, business: input.business, city: input.city, state: input.state, gstin: input.gstin ?? null, phone: user.phone });
+      await repos.auth.linkBuyer(userId, buyer.id, input.language);
     });
     return this.auth.sessionFor(userId);
   }

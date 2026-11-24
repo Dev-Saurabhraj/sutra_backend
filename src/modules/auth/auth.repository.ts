@@ -64,6 +64,10 @@ export class AuthRepository {
     return this.db.user.update({ where: { id: userId }, data: { producerId, language } });
   }
 
+  linkBuyer(userId: string, buyerId: string, language: string) {
+    return this.db.user.update({ where: { id: userId }, data: { buyerId, language, role: "BUYER" } });
+  }
+
   setLanguage(userId: string, language: string) {
     return this.db.user.update({ where: { id: userId }, data: { language } });
   }

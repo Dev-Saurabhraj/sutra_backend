@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { splitByCapacity } from "./split.js";
 import { availableActions, deliveredOnTime, nextStatus, updatedOnTimeRate } from "./order-flow.js";
 import { margin, unitCost } from "./pricing.js";
 
@@ -42,5 +43,23 @@ describe("price floor", () => {
     expect(margin(3200, cost.total)).toMatchObject({ perUnit: 502, belowCost: false, thin: false, pct: 15.7 });
     expect(margin(2900, cost.total)).toMatchObject({ thin: true, belowCost: false });
     expect(margin(2500, cost.total)).toMatchObject({ belowCost: true, perUnit: -198 });
+  });
+});
+
+describe("splitByCapacity for a buyer", () => {
+  const makers = [
+    { producerId: "me", productId: "a", capacityByDate: 61 },
+    ...["b", "c", "d", "e", "f", "g"].map((id, i) => ({ producerId: id, productId: id, capacityByDate: 30 - i * 4 })),
+  ];
+
+  it("keeps the chosen maker plus the biggest others, at most maxMakers", () => {
+    const r = splitByCapacity(makers, 150, "me", 4);
+    expect(r.rows.map((x) => x.producerId)).toEqual(["me", "b", "c", "d"]);
+    expect(r.rows[0]!.assigned).toBe(61);
+    expect(r.covered).toBe(61 + 30 + 26 + 22);
+  });
+
+  it("without a cap shares across everyone (cluster admin view)", () => {
+    expect(splitByCapacity(makers, 150, "me").rows.length).toBe(7);
   });
 });

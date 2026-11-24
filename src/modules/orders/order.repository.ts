@@ -7,6 +7,8 @@ const orderInclude = {
   buyer: { select: { id: true, name: true, business: true, city: true, state: true, gstin: true, phone: true } },
 } satisfies Prisma.OrderInclude;
 
+const makerBrief = { slug: true, businessName: true, city: true, avatarColor: true, onTimeRate: true } satisfies Prisma.ProducerSelect;
+
 type OrderWithParts = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 
 export type OrderRow = ReturnType<typeof toRow>;
@@ -51,8 +53,37 @@ export class OrderRepository {
     return o ? toRow(o) : null;
   }
 
+  /** A buyer's own orders, newest first, with the maker each one is with. */
+  async listForBuyer(buyerId: string, take = 50) {
+    const rows = await this.db.order.findMany({
+      where: { buyerId },
+      include: { ...orderInclude, producer: { select: makerBrief }, messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+      orderBy: { createdAt: "desc" },
+      take,
+    });
+    return rows.map((o) => {
+      const m = o.messages[0];
+      return { ...toRow(o), maker: o.producer, lastMessage: m ? { text: m.textEn ?? m.text, sender: m.sender } : null };
+    });
+  }
+
+  async byCodeForBuyer(buyerId: string, code: string) {
+    const o = await this.db.order.findFirst({ where: { buyerId, code }, include: { ...orderInclude, producer: { select: makerBrief } } });
+    return o ? { ...toRow(o), maker: o.producer } : null;
+  }
+
+  /** Orders created together by one request split across makers. */
+  async group(parentCode: string) {
+    return this.db.order.findMany({ where: { parentCode }, select: { code: true, qty: true, status: true, producer: { select: { businessName: true } } }, orderBy: { code: "asc" } });
+  }
+
   async update(id: string, data: Prisma.OrderUncheckedUpdateInput): Promise<void> {
     await this.db.order.update({ where: { id }, data });
+  }
+
+  async producerOf(id: string): Promise<string> {
+    const o = await this.db.order.findUniqueOrThrow({ where: { id }, select: { producerId: true } });
+    return o.producerId;
   }
 
   async dispatchPhotoPath(id: string): Promise<string | null> {

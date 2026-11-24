@@ -23,6 +23,8 @@ import { gstRouter } from "./modules/gst/gst.controller.js";
 import { orderRouter } from "./modules/orders/order.controller.js";
 import { catalogRouter } from "./modules/catalog/catalog.controller.js";
 import { CATALOG_FOLDER } from "./modules/catalog/catalog.service.js";
+import { capacityRouter } from "./modules/capacity/capacity.controller.js";
+import { marketRouter } from "./modules/market/market.controller.js";
 
 export function createApp(c: Container): Express {
   const app = express();
@@ -73,6 +75,8 @@ export function createApp(c: Container): Express {
   secured.use("/gst", gstRouter(c.gst));
   secured.use("/orders", orderRouter(c.orders));
   secured.use("/catalog", catalogRouter(c.catalog));
+  secured.use("/capacity", capacityRouter(c.capacity));
+  secured.use("/market", marketRouter(c.market));
   v1.use(secured);
 
   app.use("/api/v1", v1);

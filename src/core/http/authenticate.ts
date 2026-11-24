@@ -2,7 +2,7 @@ import type { Request, RequestHandler } from "express";
 import { AppError } from "../errors.js";
 import type { TokenService } from "../../modules/auth/token.service.js";
 
-export type AuthContext = { userId: string; producerId: string | null; role: string };
+export type AuthContext = { userId: string; producerId: string | null; buyerId: string | null; role: string };
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -20,7 +20,7 @@ export function authenticate(tokens: TokenService): RequestHandler {
     const [scheme, token] = header.split(" ");
     if (scheme !== "Bearer" || !token) return next(AppError.unauthorized());
     const claims = tokens.verifyAccess(token);
-    req.auth = { userId: claims.sub, producerId: claims.pid, role: claims.role };
+    req.auth = { userId: claims.sub, producerId: claims.pid, buyerId: claims.bid, role: claims.role };
     next();
   };
 }
@@ -30,6 +30,13 @@ export function producerIdOf(req: Request): string {
   const pid = req.auth?.producerId;
   if (!pid) throw AppError.forbidden("This account is not a producer account");
   return pid;
+}
+
+/** The buyer business the caller acts for (marketplace accounts only). */
+export function buyerIdOf(req: Request): string {
+  const bid = req.auth?.buyerId;
+  if (!bid) throw AppError.forbidden("This account is not a buyer account");
+  return bid;
 }
 
 export function userIdOf(req: Request): string {
