@@ -16,7 +16,7 @@ export class WageHandler implements VoiceActionHandler {
   }
 
   async describe(a: VoiceAction, { repos, producer }: PreviewContext): Promise<ActionView> {
-    const plan = await this.plan(repos, producer.id, a);
+    const plan = await this.plan(repos, producer.id, a, new Date());
     if (!plan) return { label: `Wages ${inr(a.amount)} to ${a.party}`, labelHi: `${a.party} को ${inr(a.amount)}`, blocked: { en: "No karigar with this name", hi: "इस नाम का कारीगर नहीं मिला" } };
     const { w, wage, recovery, extraAdvance, dueAfter } = plan;
     const parts = [
@@ -37,8 +37,8 @@ export class WageHandler implements VoiceActionHandler {
     };
   }
 
-  async execute(a: VoiceAction, { repos, producer }: ExecuteContext): Promise<ActionResult> {
-    const plan = await this.plan(repos, producer.id, a);
+  async execute(a: VoiceAction, { repos, producer, now }: ExecuteContext): Promise<ActionResult> {
+    const plan = await this.plan(repos, producer.id, a, now);
     if (!plan) return { text: "No karigar with this name", textHi: "इस नाम का कारीगर नहीं मिला" };
     const { w, wage, recovery, extraAdvance, dueAfter } = plan;
     const base = { producerId: producer.id, workerId: w.id, mode: "CASH" as const };
@@ -51,11 +51,11 @@ export class WageHandler implements VoiceActionHandler {
     };
   }
 
-  private async plan(repos: Repositories, producerId: string, a: VoiceAction) {
+  private async plan(repos: Repositories, producerId: string, a: VoiceAction, now: Date) {
     const name = a.party.trim().toLowerCase();
     const w = (await repos.labour.workers(producerId)).find((x) => x.name.toLowerCase() === name || x.name.toLowerCase().startsWith(name));
     if (!w) return null;
-    const period = currentPeriod(w.payCycle, new Date());
+    const period = currentPeriod(w.payCycle, now);
     const [life, inPeriod] = await Promise.all([repos.labour.totals(producerId), repos.labour.totals(producerId, period.start)]);
     const l = life.get(w.id) ?? { earned: 0, wagePaid: 0, advanceGiven: 0, recovered: 0 };
     const { wageDue, advancePending } = balances(l);

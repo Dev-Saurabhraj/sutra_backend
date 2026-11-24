@@ -10,6 +10,7 @@ const Respond = z.object({ accept: z.boolean() });
 const Dispatch = z.object({
   transporter: z.string().trim().max(60).optional(),
   lrNumber: z.string().trim().max(40).optional(),
+  vehicleNo: z.string().trim().max(15).optional(),
   photo: z.object({ base64: z.string().min(100).max(11_500_000), mediaType: z.enum(["image/png", "image/jpeg", "image/webp"]) }).optional(),
 });
 const Message = z.object({ text: z.string().trim().min(1).max(1000) });
@@ -38,6 +39,22 @@ export function orderRouter(orders: OrderService): Router {
     const { code } = parse(CodeParam, req.params);
     const photo = await orders.dispatchPhoto(producerIdOf(req), code);
     res.type(photo.mediaType).set("Cache-Control", "private, max-age=86400").send(photo.bytes);
+  });
+
+  r.post("/:code/advance", async (req, res) => {
+    const { code } = parse(CodeParam, req.params);
+    const { pct } = parse(z.object({ pct: z.number().int().min(5).max(90) }), req.body);
+    res.json(await orders.requestAdvance(producerIdOf(req), code, pct));
+  });
+
+  r.post("/:code/advance/received", async (req, res) => {
+    const { code } = parse(CodeParam, req.params);
+    res.json(await orders.confirmAdvance(producerIdOf(req), code));
+  });
+
+  r.get("/:code/eway-bill", async (req, res) => {
+    const { code } = parse(CodeParam, req.params);
+    res.json(await orders.ewayBill(producerIdOf(req), code));
   });
 
   r.post("/:code/deliver", async (req, res) => {

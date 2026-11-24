@@ -43,6 +43,11 @@ export function marketRouter(market: MarketService): Router {
     const { code } = parse(CodeParam, req.params);
     res.status(201).json(await market.message(buyerIdOf(req), code, parse(Message, req.body).text));
   });
+  r.post("/orders/:code/advance-paid", async (req, res) => {
+    const { code } = parse(CodeParam, req.params);
+    const { utr } = parse(z.object({ utr: z.string().trim().regex(/^\d{12}$/, "The UPI reference is 12 digits") }), req.body);
+    res.json(await market.claimAdvance(buyerIdOf(req), code, utr));
+  });
   r.get("/orders/:code/dispatch-photo", async (req, res) => {
     const photo = await market.dispatchPhoto(buyerIdOf(req), parse(CodeParam, req.params).code);
     res.type(photo.mediaType).set("Cache-Control", "private, max-age=86400").send(photo.bytes);

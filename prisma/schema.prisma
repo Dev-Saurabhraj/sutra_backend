@@ -264,6 +264,12 @@ model Producer {
   capacityEvents CapacityEvent[]
 }
 
+enum AdvanceStatus {
+  REQUESTED // maker asked
+  CLAIMED // buyer says paid (with UTR)
+  PAID // maker confirmed it arrived
+}
+
 enum CapacityKind {
   HOLIDAY
   FESTIVAL
@@ -467,6 +473,13 @@ model Order {
   transporter         String?
   lrNumber            String? // lorry receipt / docket number
   dispatchPhoto       String? // stored photo of the packed goods or LR
+  vehicleNo           String? // for the e-way bill (Part B)
+  // B8: an advance paid straight to the maker's UPI before production (Sutra never holds the money)
+  advanceAmount       Decimal?     @db.Decimal(14, 2)
+  advanceStatus       AdvanceStatus?
+  advanceRef          String? // UPI transaction reference (UTR) the buyer gave
+  advanceRequestedAt  DateTime?
+  advancePaidAt       DateTime?
   invoices            Invoice[]
   messages            Message[]
 

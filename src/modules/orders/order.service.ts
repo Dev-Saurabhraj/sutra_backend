@@ -6,6 +6,11 @@ import type { Translator } from "../../ai/translator.js";
 import { availableActions, deliveredOnTime, nextStatus, updatedOnTimeRate, type OrderAction, type OrderStatusKind } from "../../engine/order-flow.js";
 import { margin, unitCost } from "../../engine/pricing.js";
 import { stateForCity } from "../../shared/gst/states.js";
+import { ewayBillFields, ewayBillNeed } from "../../shared/gst/eway-bill.js";
+import { inr, round2 } from "../../shared/money.js";
+
+/** Crafts treated as handicraft goods for the e-way bill rule (CBIC handicraft list). */
+const HANDICRAFT_INDUSTRIES = ["handloom", "brass", "pottery", "toys"];
 import { shortDate, type Clock } from "../../shared/time.js";
 import type { QuoteService } from "../quotes/quote.service.js";
 import type { InventoryService, SaleBuyer } from "../inventory/inventory.service.js";
@@ -19,7 +24,10 @@ const TABS: Record<OrderTab, OrderStatus[]> = {
   done: ["DELIVERED", "DECLINED"],
 };
 
-export type DispatchInput = { transporter?: string; lrNumber?: string; photo?: { base64: string; mediaType: string } };
+export type DispatchInput = { transporter?: string; lrNumber?: string; vehicleNo?: string; photo?: { base64: string; mediaType: string } };
+
+/** Advances only for orders being made: before dispatch, after the maker has said yes. */
+const ADVANCE_STAGES = ["CONFIRMED", "IN_PRODUCTION"];
 
 /** The orders inbox: answer requests honestly, move orders through their stages, talk to the buyer. */
 export class OrderService {
@@ -105,9 +113,12 @@ export class OrderService {
     await this.uow.run(async (repos) => {
       await this.inventory.shipIn(repos, producer, {
         productId: order.product.id, qty: order.qty, rate: order.rate, buyer: this.buyerOf(order, producer), orderId: order.id, source: "APP",
+        // an advance already received is not owed again
+        alreadyPaid: order.advance?.status === "PAID" ? order.advance.amount : 0,
       });
       await repos.orders.update(order.id, {
         status: to, dispatchedAt: now, transporter: input.transporter || null, lrNumber: input.lrNumber || null, dispatchPhoto: photo,
+        vehicleNo: input.vehicleNo?.toUpperCase().replace(/\s+/g, "") || null,
       });
       const via = [input.transporter, input.lrNumber ? `LR ${input.lrNumber}` : ""].filter(Boolean).join(", ");
       const hi = `माल भेज दिया${via ? ` (${via})` : ""}। बिल साथ में है।`;
@@ -136,6 +147,59 @@ export class OrderService {
     const en = await this.translator.translate(clean, "en");
     await this.repos.orders.addMessage({ producerId, orderId: order.id, sender: "PRODUCER", text: clean, textHi: clean, textEn: en ?? clean });
     return this.detail(producerId, code);
+  }
+
+  /** B8: ask the buyer for part of the money before making. Paid straight to the maker's UPI ID. */
+  async requestAdvance(producerId: string, code: string, pct: number) {
+    const producer = await this.producer(producerId);
+    const order = await this.order(producerId, code);
+    if (!ADVANCE_STAGES.includes(order.status)) throw AppError.conflict("WRONG_STAGE", "Ask for an advance after accepting and before dispatch");
+    if (order.advance?.status === "PAID") throw AppError.conflict("ADVANCE_PAID", "The advance for this order is already paid");
+    if (!producer.upiId) throw AppError.badRequest("NO_UPI", "Add your UPI ID in your profile first, so the buyer can pay you directly");
+    const doc = await this.repos.orders.saleDocument(order.id);
+    const total = doc?.total ?? order.qty * order.rate;
+    const amount = round2((total * pct) / 100);
+    await this.uow.run(async (repos) => {
+      await repos.orders.update(order.id, { advanceAmount: amount, advanceStatus: "REQUESTED", advanceRequestedAt: this.clock.now(), advanceRef: null, advancePaidAt: null });
+      const en = `Please pay an advance of ${inr(amount)} (${pct}%) to start production. It goes straight to ${producer.businessName}'s UPI ID ${producer.upiId}.`;
+      const hi = `उत्पादन शुरू करने के लिए ${inr(amount)} (${pct}%) एडवांस माँगा। पैसा सीधे आपके UPI ${producer.upiId} में आएगा।`;
+      await repos.orders.addMessage({ producerId, orderId: order.id, sender: "PRODUCER", text: hi, textHi: hi, textEn: en });
+    });
+    return this.detail(producerId, code);
+  }
+
+  /** The maker saw the money arrive. */
+  async confirmAdvance(producerId: string, code: string) {
+    const order = await this.order(producerId, code);
+    if (!order.advance) throw AppError.conflict("NO_ADVANCE", "No advance was asked for this order");
+    if (order.advance.status === "PAID") return this.detail(producerId, code);
+    await this.uow.run(async (repos) => {
+      await repos.orders.update(order.id, { advanceStatus: "PAID", advancePaidAt: this.clock.now() });
+      const hi = `एडवांस ${inr(order.advance!.amount)} मिल गया, धन्यवाद। काम शुरू है।`;
+      const en = `Advance of ${inr(order.advance!.amount)} received, thank you. Production is on.`;
+      await repos.orders.addMessage({ producerId, orderId: order.id, sender: "PRODUCER", text: hi, textHi: hi, textEn: en });
+    });
+    return this.detail(producerId, code);
+  }
+
+  /** X6: does this consignment need an e-way bill, and the fields to fill on the portal. */
+  async ewayBill(producerId: string, code: string) {
+    const producer = await this.producer(producerId);
+    const order = await this.order(producerId, code);
+    const doc = await this.repos.orders.saleDocument(order.id);
+    const buyer = this.buyerOf(order, producer);
+    const value = doc?.total ?? order.qty * order.rate;
+    const input = {
+      docType: (doc?.kind ?? "TAX") as "TAX" | "BILL_OF_SUPPLY" | "PROFORMA",
+      docNo: doc?.number ?? order.code, docDate: doc?.issuedAt ?? this.clock.now(),
+      value, taxable: doc?.taxable ?? order.qty * order.rate, cgst: doc?.cgst ?? 0, sgst: doc?.sgst ?? 0, igst: doc?.igst ?? 0,
+      gstRate: doc?.gstRate ?? 0, hsn: doc?.hsn ?? "", item: doc?.itemName ?? order.product.name, qty: order.qty,
+      from: { gstin: producer.gstin, name: producer.businessName, state: producer.state, city: producer.city },
+      to: { gstin: buyer.gstin, name: buyer.name, state: buyer.state },
+      transporter: order.transporter, lrNumber: order.lrNumber, vehicleNo: order.vehicleNo,
+      handicraft: HANDICRAFT_INDUSTRIES.includes(producer.industry.key),
+    };
+    return { ...ewayBillNeed(input), finalDocument: !!doc && doc.kind !== "PROFORMA", ...ewayBillFields(input) };
   }
 
   /** Proof of dispatch photo (only the producer sees it here; the buyer portal will get its own link). */

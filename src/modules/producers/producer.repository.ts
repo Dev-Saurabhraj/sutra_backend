@@ -62,6 +62,11 @@ export class ProducerRepository {
     await this.db.producer.update({ where: { id: producerId }, data: { ordersDone: { increment: 1 }, onTimeRate } });
   }
 
+  async marks(producerId: string): Promise<string[]> {
+    const p = await this.db.producer.findUnique({ where: { id: producerId }, select: { marks: true } });
+    return p?.marks ?? [];
+  }
+
   /** The cluster a cluster admin manages. */
   clusterBrief(id: string) {
     return this.db.cluster.findUnique({ where: { id }, select: { id: true, slug: true, name: true, city: true, state: true } });

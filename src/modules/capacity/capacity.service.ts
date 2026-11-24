@@ -58,9 +58,11 @@ export class CapacityService {
       if (!q || q.qtyByWanted >= o.promisedQtyByWanted) continue;
       risky.push({ code: o.code, promised: o.promisedQtyByWanted, nowPossible: q.qtyByWanted });
       const who = o.buyer?.business ?? o.code;
+      const title = `${o.code} may be late: ${q.qtyByWanted} of ${o.promisedQtyByWanted} by ${shortDate(o.wantedBy)}`;
+      if (await this.repos.alerts.hasUnread(producerId, "ORDER", title)) continue;
       await this.repos.alerts.create({
         producerId, kind: "ORDER", route: `/order/${o.code}`,
-        title: `${o.code} may be late: ${q.qtyByWanted} of ${o.promisedQtyByWanted} by ${shortDate(o.wantedBy)}`,
+        title,
         titleHi: `${o.code} देर हो सकता है: ${shortDate(o.wantedBy, "hi")} तक ${o.promisedQtyByWanted} में से ${q.qtyByWanted}`,
         body: `The days off you added slow this order. Tell ${who} early.`,
         bodyHi: `आपकी छुट्टी के दिन गिनने पर यह ऑर्डर धीमा होगा। ${who} को पहले बता दें।`,

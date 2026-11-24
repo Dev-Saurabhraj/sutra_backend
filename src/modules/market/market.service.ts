@@ -6,7 +6,8 @@ import { splitByCapacity } from "../../engine/split.js";
 import { validateGstin } from "../../shared/gst/gstin.js";
 import { decideSaleDocument, noTax, splitTax } from "../../shared/gst/tax.js";
 import { shortDate, type Clock } from "../../shared/time.js";
-import { round2 } from "../../shared/money.js";
+import { inr, round2 } from "../../shared/money.js";
+import { upiLink } from "../../shared/upi.js";
 import type { InvoiceService } from "../invoices/invoice.service.js";
 import type { QuoteService, QuoteView } from "../quotes/quote.service.js";
 import type { Listing, MakerRow, MarketFilter } from "./market.repository.js";
@@ -143,8 +144,9 @@ export class MarketService {
       this.repos.orders.invoices(o.id),
       o.parentCode ? this.repos.orders.group(o.parentCode) : Promise.resolve([]),
     ]);
+    const advance = o.advance ? { ...o.advance, upiUrl: o.advance.status === "PAID" ? null : await this.advanceLink(o.id, o.code, o.advance.amount) } : null;
     return {
-      order: { ...o, stage: trackStage(o.status) },
+      order: { ...o, stage: trackStage(o.status), advance },
       stages: TRACK_STAGES,
       messages: messages.map((m) => ({
         id: m.id, mine: m.sender === "BUYER", createdAt: m.createdAt,
@@ -166,6 +168,32 @@ export class MarketService {
     const producerId = await this.repos.orders.producerOf(o.id);
     await this.repos.orders.addMessage({ producerId, orderId: o.id, sender: "BUYER", text: clean, textEn: clean, textHi: hi });
     return this.order(buyerId, code);
+  }
+
+  /** The buyer says the advance is paid and gives the UPI reference; the maker then confirms it arrived. */
+  async claimAdvance(buyerId: string, code: string, utr: string) {
+    const o = await this.repos.orders.byCodeForBuyer(buyerId, code);
+    if (!o) throw AppError.notFound("Order");
+    if (!o.advance || o.advance.status === "PAID") throw AppError.conflict("NO_ADVANCE_DUE", "No advance is due on this order");
+    const producerId = await this.repos.orders.producerOf(o.id);
+    await this.uow.run(async (repos) => {
+      await repos.orders.update(o.id, { advanceStatus: "CLAIMED", advanceRef: utr });
+      const en = `Advance of ${inr(o.advance!.amount)} paid. UPI reference ${utr}.`;
+      const hi = `${inr(o.advance!.amount)} एडवांस भेज दिया। UPI रेफ़रेंस ${utr}। खाते में देखकर "मिल गया" दबाएँ।`;
+      await repos.orders.addMessage({ producerId, orderId: o.id, sender: "BUYER", text: en, textEn: en, textHi: hi });
+      await repos.alerts.create({
+        producerId, kind: "PAYMENT", route: `/order/${o.code}`,
+        title: `Advance ${inr(o.advance!.amount)} paid for ${o.code}: check your UPI`, titleHi: `${o.code} का ${inr(o.advance!.amount)} एडवांस आया: UPI में देखें`,
+        body: `UPI reference ${utr}. Confirm on the order once you see it.`, bodyHi: `UPI रेफ़रेंस ${utr}। पैसा दिखे तो ऑर्डर पर पक्का करें।`,
+      });
+    });
+    return this.order(buyerId, code);
+  }
+
+  private async advanceLink(orderId: string, code: string, amount: number) {
+    const producerId = await this.repos.orders.producerOf(orderId);
+    const p = await this.repos.producers.findProfile(producerId);
+    return p?.upiId ? upiLink(p.upiId, p.businessName, amount, `Advance ${code}`) : null;
   }
 
   invoicePdf(buyerId: string, invoiceId: string) {

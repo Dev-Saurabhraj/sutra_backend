@@ -31,5 +31,12 @@ export function gstRouter(gst: GstService): Router {
     res.json(file.body);
   });
 
+  // X7: GSTR-2B as downloaded from the GST portal (JSON), or the demo sample
+  r.get("/2b/sample", async (req, res) => res.json(await gst.sample2b(producerIdOf(req))));
+  r.post("/2b/reconcile", async (req, res) => {
+    const { data } = parse(z.object({ data: z.unknown() }), req.body);
+    res.json(await gst.reconcile(producerIdOf(req), data));
+  });
+
   return r;
 }

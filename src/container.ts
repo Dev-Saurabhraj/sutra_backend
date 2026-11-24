@@ -44,6 +44,7 @@ import { ClusterRepository } from "./modules/cluster/cluster.repository.js";
 import { ClusterService } from "./modules/cluster/cluster.service.js";
 import { CloudWhatsAppSender, LogWhatsAppSender, WhatsAppBot, type WhatsAppSender } from "./modules/whatsapp/whatsapp.js";
 import { PrivacyService } from "./modules/privacy/privacy.service.js";
+import { SchemeService } from "./modules/schemes/scheme.service.js";
 
 export type Container = {
   env: Env;
@@ -72,6 +73,7 @@ export type Container = {
   cluster: ClusterService;
   whatsapp: WhatsAppBot;
   privacy: PrivacyService;
+  schemes: SchemeService;
   uploadsDir: string;
 };
 
@@ -97,7 +99,9 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
   const voice = new VoiceService(repos, uow, voiceParser, VoiceActionRegistry.withDefaults(), inventory, bus, clock);
   const khata = new KhataService(repos.khata, repos.producers, clock);
   const alerts = new AlertService(repos.alerts);
-  const gst = new GstService(new GstRepository(prisma), repos, clock);
+  const gstRepo = new GstRepository(prisma);
+  const gst = new GstService(gstRepo, repos, clock);
+  const schemes = new SchemeService(repos, gstRepo, clock);
   const home = new HomeService(repos, stock, labour, inventory, gst, clock);
   const billReader: BillReader = new FallbackBillReader(
     env.aiEnabled ? [new ClaudeBillReader(env.ANTHROPIC_API_KEY, logger), new SampleBillReader(() => clock.now())] : [new SampleBillReader(() => clock.now())],
@@ -110,7 +114,7 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
   const orders = new OrderService(repos, uow, inventory, translator, quotes, files, clock);
   const capacity = new CapacityService(repos, quotes, clock);
   const market = new MarketService(repos, uow, quotes, invoices, translator, files, clock);
-  const cluster = new ClusterService(new ClusterRepository(prisma), repos, uow, quotes, gst, clock);
+  const cluster = new ClusterService(new ClusterRepository(prisma), repos, uow, quotes, gst, schemes, clock);
   const waSender: WhatsAppSender = env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_TOKEN
     ? new CloudWhatsAppSender(env.WHATSAPP_PHONE_NUMBER_ID, env.WHATSAPP_TOKEN, logger)
     : new LogWhatsAppSender(logger);
@@ -121,5 +125,5 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
 
   registerLowStockWatcher(bus, stock, repos.alerts);
 
-  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst, orders, catalog, capacity, market, prices, cluster, whatsapp, privacy, uploadsDir };
+  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst, orders, catalog, capacity, market, prices, cluster, whatsapp, privacy, schemes, uploadsDir };
 }

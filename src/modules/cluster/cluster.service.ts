@@ -7,6 +7,7 @@ import { inr, round2 } from "../../shared/money.js";
 import { addDays, shortDate, type Clock } from "../../shared/time.js";
 import type { GstService } from "../gst/gst.service.js";
 import type { QuoteService } from "../quotes/quote.service.js";
+import type { SchemeService } from "../schemes/scheme.service.js";
 import type { ClusterRepository } from "./cluster.repository.js";
 
 const GROUP_BUY_WEEKS = 4;
@@ -26,8 +27,16 @@ export class ClusterService {
     private readonly uow: UnitOfWork,
     private readonly quotes: QuoteService,
     private readonly gst: GstService,
+    private readonly schemes: SchemeService,
     private readonly clock: Clock,
   ) {}
+
+  /** What this cluster's makers actually make (the bulk-order picker shows only these). */
+  async categories(clusterId: string): Promise<string[]> {
+    const makers = await this.cluster.makers(clusterId);
+    const all = await Promise.all(makers.map((m) => this.repos.stock.products(m.id)));
+    return [...new Set(all.flat().map((p) => p.category))].sort();
+  }
 
   async clusterOf(userId: string): Promise<string> {
     const id = await this.cluster.adminCluster(userId);
@@ -169,10 +178,12 @@ export class ClusterService {
       const g = await this.gst.summary(m.id, {});
       const issues = (g.issues ?? []) as { kind: string; text: string; textHi: string; amount: number }[];
       const itcAtRisk = "itc" in g && g.itc ? (g.itc as { atRisk: number }).atRisk : 0;
+      const sch = await this.schemes.forProducer(m.id);
       return {
         id: m.id, businessName: m.businessName, scheme: m.gstScheme, gstin: m.gstin,
         gstinOk: m.gstScheme === "UNREGISTERED" ? null : validateGstin(m.gstin).valid,
         udyam: !!m.udyamNumber, issues, itcAtRisk: round2(itcAtRisk),
+        schemes: sch.schemes.filter((s) => s.fit === "LIKELY").map((s) => ({ key: s.key, name: s.name, nameHi: s.nameHi, link: s.link })),
       };
     }));
     rows.sort((a, b) => b.issues.length - a.issues.length || b.itcAtRisk - a.itcAtRisk);

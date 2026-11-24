@@ -43,6 +43,7 @@ export function createApp(c: Container): Express {
   // photos arrive as base64; only these routes accept a large body
   const bigJson = express.json({ limit: "12mb" });
   app.use("/api/v1/bills/scan", bigJson);
+  app.use("/api/v1/gst/2b/reconcile", bigJson);
   app.use(/^\/api\/v1\/orders\/[^/]+\/dispatch$/, bigJson);
   app.use(/^\/api\/v1\/catalog\/[^/]+\/draft$/, bigJson);
   app.use(express.json({ limit: "1mb" }));
@@ -86,6 +87,8 @@ export function createApp(c: Container): Express {
   secured.use("/capacity", capacityRouter(c.capacity));
   secured.use("/market", marketRouter(c.market));
   secured.use("/cluster", clusterRouter(c.cluster));
+  // C6: schemes the maker may qualify for
+  secured.get("/schemes", async (req, res) => res.json(await c.schemes.forProducer(producerIdOf(req))));
   secured.get("/prices", async (req, res) => res.json(await c.prices.report(producerIdOf(req), new Date())));
   // X4: take your data with you; delete your account
   secured.get("/me/export", async (req, res) => {

@@ -132,6 +132,12 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `GET /api/v1/prices` | Supplier price watch (P25): rates per bill, trend, cheapest supplier; a rise of 5%+ on a bill raises a `PRICE` alert |
 | `POST /api/v1/webhooks/whatsapp` (+ `GET` verify) | WhatsApp bot (P28): the voice flow over WhatsApp ("aaj 6 saree bani" → preview → "haan" saves). Signed by Meta (`WHATSAPP_APP_SECRET`); replies via the Cloud API when `WHATSAPP_PHONE_NUMBER_ID` + `WHATSAPP_TOKEN` are set, otherwise logged |
 | `GET /api/v1/me/export` · `DELETE /api/v1/me` | DPDP (X4): all your data as JSON; delete the account (login and personal details erased, business hidden; tax records kept 6 years as GST law requires) |
+| `POST /api/v1/orders/:code/advance` `{pct}` · `/advance/received` | Advance (B8): maker asks a % before making; the buyer pays straight to the maker's UPI ID (Sutra never holds money); the maker confirms; dispatch then bills only the balance |
+| `POST /api/v1/market/orders/:code/advance-paid` `{utr}` | Buyer says the advance is paid, with the 12-digit UPI reference; the maker gets an alert |
+| `GET /api/v1/orders/:code/eway-bill` | E-way bill helper (X6): needed or not (₹50,000, handicraft rule) and Part A/B prefilled for the portal |
+| `GET /api/v1/gst/2b/sample` · `POST /api/v1/gst/2b/reconcile` `{data}` | GSTR-2B reconciliation (X7): portal JSON vs the books → matched, short-filed, not filed (credit at risk), not in books |
+| `GET /api/v1/schemes` | Scheme matcher (C6): government schemes the maker may qualify for, each with why and the official link |
+| `GET /api/v1/cluster/categories` | What this cluster's makers make (for the bulk-order picker) |
 | `GET /media/catalog/*` | Public catalog photos (nothing else under `uploads/` is served) |
 | `GET /health` | DB check and AI mode |
 

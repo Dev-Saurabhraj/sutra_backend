@@ -6,7 +6,7 @@ import type { EventBus } from "../../events/event-bus.js";
 import { stateForCity } from "../../shared/gst/states.js";
 import { validateGstin } from "../../shared/gst/gstin.js";
 import { splitTax } from "../../shared/gst/tax.js";
-import { round2, round3 } from "../../shared/money.js";
+import { inr, round2, round3 } from "../../shared/money.js";
 import { addDays, type Clock } from "../../shared/time.js";
 import type { InvoiceService } from "../invoices/invoice.service.js";
 import type { LabourService } from "../labour/labour.service.js";
@@ -76,7 +76,7 @@ export class InventoryService {
   async shipIn(
     repos: Repositories,
     producer: ProducerProfile,
-    input: { productId: string; qty: number; rate: number; buyer: SaleBuyer; orderId: string; source: EntrySource },
+    input: { productId: string; qty: number; rate: number; buyer: SaleBuyer; orderId: string; source: EntrySource; alreadyPaid?: number },
   ) {
     const product = await repos.stock.product(producer.id, input.productId);
     if (!product) throw AppError.notFound("Product");
@@ -89,10 +89,14 @@ export class InventoryService {
       producer, buyer: input.buyer, item: { name: product.name, hsn: product.hsn, gstRate: product.gstRate },
       qty: input.qty, rate: input.rate, orderId: input.orderId, at: now,
     });
-    await repos.khata.create({
-      producerId: producer.id, party: input.buyer.name, direction: "RECEIVE", amount: invoice.total,
-      note: `Invoice ${invoice.number}`, dueDate: addDays(now, PAYMENT_TERMS_DAYS), invoiceNo: invoice.number,
-    });
+    const paid = Math.min(input.alreadyPaid ?? 0, invoice.total);
+    if (invoice.total - paid > 0.5) {
+      await repos.khata.create({
+        producerId: producer.id, party: input.buyer.name, direction: "RECEIVE", amount: round2(invoice.total - paid),
+        note: paid > 0 ? `Invoice ${invoice.number} (advance ${inr(paid)} received)` : `Invoice ${invoice.number}`,
+        dueDate: addDays(now, PAYMENT_TERMS_DAYS), invoiceNo: invoice.number,
+      });
+    }
     return invoice;
   }
 

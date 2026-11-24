@@ -111,6 +111,15 @@ export class OrderRepository {
   invoices(orderId: string) {
     return this.db.invoice.findMany({ where: { orderId }, select: { id: true, number: true, kind: true, total: true }, orderBy: { issuedAt: "asc" } });
   }
+
+  /** The latest sale document of an order (tax invoice / bill of supply, else the proforma). */
+  async saleDocument(orderId: string) {
+    const rows = await this.db.invoice.findMany({ where: { orderId }, orderBy: { issuedAt: "desc" } });
+    const doc = rows.find((r) => r.kind !== "PROFORMA") ?? rows[0];
+    return doc
+      ? { kind: doc.kind, number: doc.number, issuedAt: doc.issuedAt, taxable: num(doc.taxable), cgst: num(doc.cgst), sgst: num(doc.sgst), igst: num(doc.igst), total: num(doc.total), gstRate: num(doc.gstRate), hsn: doc.hsn, itemName: doc.itemName, buyerName: doc.buyerName, buyerGstin: doc.buyerGstin, buyerState: doc.buyerState }
+      : null;
+  }
 }
 
 function toRow(o: OrderWithParts) {
@@ -118,7 +127,10 @@ function toRow(o: OrderWithParts) {
     id: o.id, code: o.code, status: o.status, channel: o.channel, qty: o.qty, rate: num(o.rate),
     wantedBy: o.wantedBy, promisedQtyByWanted: o.promisedQtyByWanted, fullDate: o.fullDate, quoteNote: o.quoteNote,
     parentCode: o.parentCode, createdAt: o.createdAt, updatedAt: o.updatedAt, deliveredAt: o.deliveredAt,
-    dispatchedAt: o.dispatchedAt, transporter: o.transporter, lrNumber: o.lrNumber, hasDispatchPhoto: !!o.dispatchPhoto,
+    dispatchedAt: o.dispatchedAt, transporter: o.transporter, lrNumber: o.lrNumber, hasDispatchPhoto: !!o.dispatchPhoto, vehicleNo: o.vehicleNo,
+    advance: o.advanceStatus
+      ? { amount: num(o.advanceAmount), status: o.advanceStatus, ref: o.advanceRef, requestedAt: o.advanceRequestedAt, paidAt: o.advancePaidAt }
+      : null,
     product: { id: o.product.id, name: o.product.name, nameHi: o.product.nameHi, palette: o.product.palette, imageUrl: o.product.imageUrl, price: num(o.product.price), stock: o.product.stock },
     buyer: o.buyer,
   };

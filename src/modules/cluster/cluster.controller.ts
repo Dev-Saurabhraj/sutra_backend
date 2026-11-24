@@ -21,6 +21,7 @@ export function clusterRouter(cluster: ClusterService): Router {
   r.get("/", async (req, res) => res.json(await cluster.overview(await cid(req))));
   r.post("/split", async (req, res) => res.json(await cluster.split(await cid(req), parse(Bulk, req.body))));
   r.post("/split/send", async (req, res) => res.status(201).json(await cluster.sendSplit(await cid(req), parse(Bulk, req.body))));
+  r.get("/categories", async (req, res) => res.json({ categories: await cluster.categories(await cid(req)) }));
   r.get("/group-buy", async (req, res) => res.json(await cluster.groupBuy(await cid(req))));
   r.get("/compliance", async (req, res) => res.json(await cluster.compliance(await cid(req))));
   r.get("/impact", async (req, res) => res.json(await cluster.impact(await cid(req))));
