@@ -134,6 +134,11 @@ export class StockRepository {
     return { gstRate: num(m.gstRate), hsn: m.hsn };
   }
 
+  async materialCost(materialId: string): Promise<number> {
+    const m = await this.db.material.findUnique({ where: { id: materialId }, select: { costPerUnit: true } });
+    return m ? num(m.costPerUnit) : 0;
+  }
+
   async setMaterialCost(materialId: string, costPerUnit: number): Promise<void> {
     await this.db.material.update({ where: { id: materialId }, data: { costPerUnit } });
   }

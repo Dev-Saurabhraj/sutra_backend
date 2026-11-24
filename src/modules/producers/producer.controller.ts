@@ -19,6 +19,7 @@ export function meRouter(repos: Repositories, auth: AuthService, home: HomeServi
     // From the database, not the token: the token may predate onboarding.
     const producer = user.producerId ? await repos.producers.findProfile(user.producerId) : null;
     const buyer = user.buyerId ? await repos.market.buyer(user.buyerId) : null;
+    const cluster = user.role === "CLUSTER_ADMIN" && user.clusterId ? await repos.producers.clusterBrief(user.clusterId) : null;
     res.json({
       user: {
         id: user.id, phone: user.phone, role: user.role, language: user.language,
@@ -26,6 +27,7 @@ export function meRouter(repos: Repositories, auth: AuthService, home: HomeServi
       },
       producer,
       buyer,
+      cluster,
       consentVersion: CONSENT_VERSION,
     });
   });

@@ -39,7 +39,7 @@ function nextInvoice(producerId: string, businessName: string, kind: "TAX" | "PR
 }
 
 /** Demo phone numbers: makers +91 98000 000NN, buyers +91 97000 000NN. Everything else is a real account. */
-const DEMO_PHONE = /^\+91(98|97)000000\d\d$/;
+const DEMO_PHONE = /^\+91(98|97|96)000000\d\d$/;
 
 async function reset() {
   // Never wipe accounts people made themselves (their onboarding, stock, khata) by accident.
@@ -218,6 +218,9 @@ async function main() {
 
   /** Phase 5: buyer logins, quality marks on the trust profile, and Rohit's capacity calendar. */
   async function marketExtras() {
+    // The Chanderi cooperative's secretary sees the cluster dashboard
+    const chanderiCluster = await db.cluster.findUniqueOrThrow({ where: { slug: "chanderi" } });
+    await db.user.create({ data: { phone: "+919600000001", role: "CLUSTER_ADMIN", clusterId: chanderiCluster.id, language: "hi" } });
     // Kaveri Boutique (Bengaluru) and Neel Textiles (Jaipur) can log in as buyers
     for (const biz of ["Kaveri Boutique", "Neel Textiles"]) {
       const b = buyerBy(biz);
@@ -486,7 +489,7 @@ async function main() {
     producers: await db.producer.count(), users: await db.user.count(), products: await db.product.count(),
     orders: await db.order.count(), invoices: await db.invoice.count(), movements: await db.stockMovement.count(),
   };
-  console.log("Seeded", counts, "\nDemo login: +919800000001 (Rohit, maker) or +919700000001 (Kaveri Boutique, buyer) with the DEV_OTP from .env");
+  console.log("Seeded", counts, "\nDemo login: +919800000001 (Rohit, maker), +919700000001 (Kaveri Boutique, buyer) or +919600000001 (Chanderi cluster admin) with the DEV_OTP from .env");
 }
 
 main()

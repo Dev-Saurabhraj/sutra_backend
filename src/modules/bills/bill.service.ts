@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { AppError } from "../../core/errors.js";
+import type { PriceWatch } from "../stock/price-watch.js";
 import type { FileStore } from "../../core/file-store.js";
 import type { Repositories, UnitOfWork } from "../../data/unit-of-work.js";
 import { inr, round2 } from "../../shared/money.js";
@@ -25,6 +26,7 @@ export class BillService {
     private readonly files: FileStore,
     private readonly clock: Clock,
     private readonly aiEnabled: boolean,
+    private readonly prices: PriceWatch,
   ) {}
 
   samples() {
@@ -93,6 +95,7 @@ export class BillService {
       const updated = [];
       for (const l of lines) {
         const stock = await repos.stock.moveMaterial({ producerId, materialId: l.materialId, kind: "PURCHASE", qty: l.qty, source: "BILL", note: bill.billNo });
+        await this.prices.check(repos, producerId, l.materialId, l.rate, supplier.name);
         await repos.stock.setMaterialCost(l.materialId, l.rate);
         await repos.stock.markSupplierOrdersReceived(l.materialId);
         const m = await repos.stock.materialWithSupplier(producerId, l.materialId);

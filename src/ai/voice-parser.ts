@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const VOICE_ACTION_KINDS = ["PRODUCE", "SALE", "PURCHASE", "PAYMENT_RECEIVED", "PAYMENT_MADE"] as const;
+export const VOICE_ACTION_KINDS = ["PRODUCE", "SALE", "PURCHASE", "PAYMENT_RECEIVED", "PAYMENT_MADE", "WAGE_PAID"] as const;
 export type VoiceActionKind = (typeof VOICE_ACTION_KINDS)[number];
 
 export const VoiceActionSchema = z.object({
@@ -9,7 +9,7 @@ export const VoiceActionSchema = z.object({
   materialId: z.string().describe("for PURCHASE: id from the material list, else empty"),
   qty: z.number().describe("units or material quantity; 0 for payments"),
   amount: z.number().describe("rupees for payments; 0 otherwise"),
-  party: z.string().describe("buyer, supplier or city mentioned; empty if none"),
+  party: z.string().describe("buyer, supplier or city mentioned; for WAGE_PAID the worker's name exactly as in the worker list; empty if none"),
 });
 export type VoiceAction = z.infer<typeof VoiceActionSchema>;
 
@@ -21,6 +21,8 @@ export const VoiceParseSchema = z.object({
 export type VoiceContext = {
   products: { id: string; name: string; nameHi: string }[];
   materials: { id: string; name: string; nameHi: string; unit: string }[];
+  /** Karigars, so "Salim ko 2000 diye" is a wage payment, not a supplier payment. */
+  workers?: { id: string; name: string }[];
 };
 
 export type VoiceParse = z.infer<typeof VoiceParseSchema> & {

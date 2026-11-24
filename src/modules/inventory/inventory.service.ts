@@ -1,5 +1,6 @@
 import type { EntrySource } from "@prisma/client";
 import { AppError } from "../../core/errors.js";
+import type { PriceWatch } from "../stock/price-watch.js";
 import type { Repositories, UnitOfWork } from "../../data/unit-of-work.js";
 import type { EventBus } from "../../events/event-bus.js";
 import { stateForCity } from "../../shared/gst/states.js";
@@ -29,6 +30,7 @@ export class InventoryService {
     private readonly stock: StockService,
     private readonly bus: EventBus,
     private readonly clock: Clock,
+    private readonly prices: PriceWatch,
   ) {}
 
   // ------------------------------------------------------------ core operations (inside a unit of work)
@@ -115,6 +117,7 @@ export class InventoryService {
       ...tax, gstinValid: validateGstin(supplier.gstin).valid,
       items: [{ materialId: material.id, qty: input.qty, rate: input.rate, amount: round2(input.qty * input.rate) }],
     });
+    await this.prices.check(repos, producer.id, material.id, input.rate, supplier.name);
     await repos.stock.setMaterialCost(material.id, input.rate);
     await repos.khata.create({
       producerId: producer.id, party: supplier.name, direction: "PAY", amount: tax.total,

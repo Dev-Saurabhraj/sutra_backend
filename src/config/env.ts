@@ -12,6 +12,11 @@ const EnvSchema = z.object({
   DEV_OTP: z.string().regex(/^\d{6}$/).optional().or(z.literal("")),
   ANTHROPIC_API_KEY: z.string().optional().default(""),
   SUTRA_AI: z.string().optional().default(""),
+  // WhatsApp Cloud API (P28). Without a number id + token, replies are logged instead of sent.
+  WHATSAPP_VERIFY_TOKEN: z.string().optional().default(""),
+  WHATSAPP_APP_SECRET: z.string().optional().default(""),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional().default(""),
+  WHATSAPP_TOKEN: z.string().optional().default(""),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

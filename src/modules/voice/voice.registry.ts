@@ -4,6 +4,7 @@ import { ProduceHandler } from "./handlers/produce.handler.js";
 import { SaleHandler } from "./handlers/sale.handler.js";
 import { PurchaseHandler } from "./handlers/purchase.handler.js";
 import { PaymentHandler } from "./handlers/payment.handler.js";
+import { WageHandler } from "./handlers/wage.handler.js";
 
 /** Registry of voice action handlers. To support a new kind, register a new handler here. */
 export class VoiceActionRegistry {
@@ -24,6 +25,7 @@ export class VoiceActionRegistry {
       .register(new SaleHandler())
       .register(new PurchaseHandler())
       .register(new PaymentHandler("PAYMENT_RECEIVED"))
-      .register(new PaymentHandler("PAYMENT_MADE"));
+      .register(new PaymentHandler("PAYMENT_MADE"))
+      .register(new WageHandler());
   }
 }

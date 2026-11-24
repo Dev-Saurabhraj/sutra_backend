@@ -37,9 +37,11 @@ export class VoiceService {
   async preview(producerId: string, transcript: string): Promise<VoicePreview> {
     const producer = await this.producer(producerId);
     const catalog = await this.catalog(this.repos, producerId);
+    const workers = await this.repos.labour.workers(producerId);
     const parsed = await this.parser.parse(transcript, {
       products: [...catalog.products.values()],
       materials: [...catalog.materials.values()],
+      workers: workers.map((w) => ({ id: w.id, name: w.name })),
     });
     const actions = (parsed?.actions ?? []).filter((a) => this.registry.get(a.kind)?.isValid(a, catalog));
     if (!parsed || actions.length === 0) {

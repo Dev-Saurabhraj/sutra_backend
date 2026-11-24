@@ -62,6 +62,11 @@ export class ProducerRepository {
     await this.db.producer.update({ where: { id: producerId }, data: { ordersDone: { increment: 1 }, onTimeRate } });
   }
 
+  /** The cluster a cluster admin manages. */
+  clusterBrief(id: string) {
+    return this.db.cluster.findUnique({ where: { id }, select: { id: true, slug: true, name: true, city: true, state: true } });
+  }
+
   async updateLanguage(producerId: string, language: string): Promise<void> {
     await this.db.producer.update({ where: { id: producerId }, data: { language } });
   }

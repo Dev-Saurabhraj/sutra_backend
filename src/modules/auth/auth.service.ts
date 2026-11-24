@@ -30,7 +30,8 @@ export function normalizePhone(raw: string): string {
 }
 
 /** A new number first chooses: I make/sell (producer) or I buy for my business (buyer). */
-export const needsOnboarding = (u: { producerId: string | null; buyerId: string | null }) => u.producerId === null && u.buyerId === null;
+export const needsOnboarding = (u: { producerId: string | null; buyerId: string | null; clusterId?: string | null }) =>
+  u.producerId === null && u.buyerId === null && !u.clusterId;
 
 export class AuthService {
   constructor(
@@ -103,7 +104,7 @@ export class AuthService {
   }
 
   private async issueSession(user: {
-    id: string; phone: string; role: string; producerId: string | null; buyerId: string | null; language: string; consentVersion: string | null;
+    id: string; phone: string; role: string; producerId: string | null; buyerId: string | null; clusterId?: string | null; language: string; consentVersion: string | null;
   }): Promise<Session> {
     const { token, hash } = this.tokens.newRefreshToken();
     await this.repo.createRefreshToken({ userId: user.id, tokenHash: hash, expiresAt: addDays(this.clock.now(), REFRESH_TTL_DAYS) });

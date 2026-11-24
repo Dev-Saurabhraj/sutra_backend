@@ -48,5 +48,6 @@ export class ClaudeVoiceParser implements VoiceParser {
 function prompt(transcript: string, ctx: VoiceContext): string {
   const products = ctx.products.map((p) => `- ${p.id}: ${p.name} / ${p.nameHi}`).join("\n");
   const materials = ctx.materials.map((m) => `- ${m.id}: ${m.name} / ${m.nameHi} (${m.unit})`).join("\n");
-  return `Products:\n${products}\nMaterials:\n${materials}\n\nVoice note: "${transcript}"`;
+  const workers = (ctx.workers ?? []).map((w) => `- ${w.name}`).join("\n");
+  return `Products:\n${products}\nMaterials:\n${materials}\nWorkers (money given to them is WAGE_PAID):\n${workers}\n\nVoice note: "${transcript}"`;
 }

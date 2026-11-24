@@ -27,6 +27,14 @@ export class RuleVoiceParser implements VoiceParser {
   }
 }
 
+/** A worker whose first name is spoken in this part ("salim ko 2000 diye"). */
+function workerIn(part: string, ctx: VoiceContext) {
+  return (ctx.workers ?? []).find((w) => {
+    const first = w.name.replace(/^(mohd\.?|md\.?)\s*/i, "").split(/\s+/)[0]?.toLowerCase();
+    return !!first && first.length >= 3 && new RegExp(`(^|\\s)${first}(\\s|$)`).test(part);
+  });
+}
+
 export function parseActions(transcript: string, ctx: VoiceContext): VoiceAction[] {
   const text = transcript.toLowerCase();
   const actions: VoiceAction[] = [];
@@ -37,6 +45,14 @@ export function parseActions(transcript: string, ctx: VoiceContext): VoiceAction
     if (PAY_IN.test(part) && /(₹|rs|rupay|rupaye|रुपये|रुपए|paise|पैसे)/.test(part)) {
       actions.push({ kind: "PAYMENT_RECEIVED", productId: "", materialId: "", qty: 0, amount: qty, party });
       continue;
+    }
+    if (PAY_OUT.test(part)) {
+      // "Salim ko 2000 diye": a karigar named → wages (no "rupees" needed: a name plus "diye" is clear enough)
+      const worker = workerIn(part, ctx);
+      if (worker) {
+        actions.push({ kind: "WAGE_PAID", productId: "", materialId: "", qty: 0, amount: qty, party: worker.name });
+        continue;
+      }
     }
     if (PAY_OUT.test(part) && /(₹|rs|rupay|rupaye|रुपये|रुपए|paise|पैसे)/.test(part)) {
       actions.push({ kind: "PAYMENT_MADE", productId: "", materialId: "", qty: 0, amount: qty, party });
@@ -99,6 +115,8 @@ function replyHi(actions: VoiceAction[], ctx: VoiceContext): string {
         return `₹${a.amount} दिए`;
       case "PURCHASE":
         return `${a.qty} माल आया`;
+      case "WAGE_PAID":
+        return `${a.party} को ₹${a.amount} मज़दूरी दी`;
     }
   });
   return `ठीक है, लिख लिया: ${parts.join(", ")}।`;

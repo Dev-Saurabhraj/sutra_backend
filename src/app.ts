@@ -5,7 +5,6 @@ import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { pinoHttp } from "pino-http";
 import type { Container } from "./container.js";
-import { authenticate } from "./core/http/authenticate.js";
 import { errorHandler, notFoundHandler } from "./core/http/error-handler.js";
 import { idempotent } from "./core/http/idempotency.js";
 import { authRouter } from "./modules/auth/auth.controller.js";
@@ -25,6 +24,9 @@ import { catalogRouter } from "./modules/catalog/catalog.controller.js";
 import { CATALOG_FOLDER } from "./modules/catalog/catalog.service.js";
 import { capacityRouter } from "./modules/capacity/capacity.controller.js";
 import { marketRouter } from "./modules/market/market.controller.js";
+import { clusterRouter } from "./modules/cluster/cluster.controller.js";
+import { whatsappRouter } from "./modules/whatsapp/whatsapp.controller.js";
+import { authenticate, producerIdOf, userIdOf } from "./core/http/authenticate.js";
 
 export function createApp(c: Container): Express {
   const app = express();
@@ -32,6 +34,12 @@ export function createApp(c: Container): Express {
   app.set("trust proxy", 1);
   app.use(helmet());
   app.use(cors({ origin: c.env.corsOrigins === "*" ? true : c.env.corsOrigins }));
+  // WhatsApp webhook: public, signed by Meta; reads the raw body itself (before the JSON parser)
+  app.use(
+    "/api/v1/webhooks/whatsapp",
+    whatsappRouter(c.whatsapp, { verifyToken: c.env.WHATSAPP_VERIFY_TOKEN, appSecret: c.env.WHATSAPP_APP_SECRET, allowUnsigned: c.env.isDev && !c.env.WHATSAPP_APP_SECRET }),
+  );
+
   // photos arrive as base64; only these routes accept a large body
   const bigJson = express.json({ limit: "12mb" });
   app.use("/api/v1/bills/scan", bigJson);
@@ -77,6 +85,15 @@ export function createApp(c: Container): Express {
   secured.use("/catalog", catalogRouter(c.catalog));
   secured.use("/capacity", capacityRouter(c.capacity));
   secured.use("/market", marketRouter(c.market));
+  secured.use("/cluster", clusterRouter(c.cluster));
+  secured.get("/prices", async (req, res) => res.json(await c.prices.report(producerIdOf(req), new Date())));
+  // X4: take your data with you; delete your account
+  secured.get("/me/export", async (req, res) => {
+    const file = await c.privacy.export(userIdOf(req));
+    res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+    res.json(file.data);
+  });
+  secured.delete("/me", async (req, res) => res.json(await c.privacy.deleteAccount(userIdOf(req))));
   v1.use(secured);
 
   app.use("/api/v1", v1);

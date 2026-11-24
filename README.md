@@ -125,6 +125,13 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `GET /api/v1/market/orders` · `/orders/:code` · `POST /orders/:code/messages` | Tracking (B6): stages, the rest of a split request, letters (maker's Hindi shown in English) |
 | `GET /api/v1/market/orders/:code/dispatch-photo` · `GET /api/v1/market/invoices/:id/pdf` | Proof of dispatch and documents, scoped to the buyer's own orders |
 | `POST /api/v1/onboarding/buyer` `{name, business, city, state, gstin?}` | Buyer account (GSTIN checked against the state); the new session carries `buyerId` |
+| `GET /api/v1/cluster` | Cluster admin (C1): every maker's production, sales, orders, stock alerts and GST status, with totals |
+| `POST /api/v1/cluster/split` · `/split/send` `{category, qty, wantedBy, buyer?}` | Bulk order (C2) shared fairly by each maker's real capacity; "send" creates one request per maker under a `BULK-` code with a Hindi alert |
+| `GET /api/v1/cluster/group-buy` | Buy together (C3): 4 weeks of material needs added up across makers, with a ready WhatsApp message for the supplier |
+| `GET /api/v1/cluster/compliance` · `/impact` | GST health per maker (C4); agent's cut kept, direct orders, income, on-time (C5) |
+| `GET /api/v1/prices` | Supplier price watch (P25): rates per bill, trend, cheapest supplier; a rise of 5%+ on a bill raises a `PRICE` alert |
+| `POST /api/v1/webhooks/whatsapp` (+ `GET` verify) | WhatsApp bot (P28): the voice flow over WhatsApp ("aaj 6 saree bani" → preview → "haan" saves). Signed by Meta (`WHATSAPP_APP_SECRET`); replies via the Cloud API when `WHATSAPP_PHONE_NUMBER_ID` + `WHATSAPP_TOKEN` are set, otherwise logged |
+| `GET /api/v1/me/export` · `DELETE /api/v1/me` | DPDP (X4): all your data as JSON; delete the account (login and personal details erased, business hidden; tax records kept 6 years as GST law requires) |
 | `GET /media/catalog/*` | Public catalog photos (nothing else under `uploads/` is served) |
 | `GET /health` | DB check and AI mode |
 
