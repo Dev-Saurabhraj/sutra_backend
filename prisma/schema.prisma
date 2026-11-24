@@ -1,0 +1,580 @@
+// Sutra data model (PostgreSQL).
+// Industry-neutral: raw material -> (recipe) -> product -> order -> invoice.
+// Ported from thread/prisma/schema.prisma and extended for the mobile app:
+// users + sessions, industry profiles as data, GST scheme, idempotency, voice audit, Decimal money.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------ enums
+
+enum UserRole {
+  PRODUCER
+  BUYER
+  CLUSTER_ADMIN
+}
+
+enum GstScheme {
+  REGULAR
+  COMPOSITION
+  UNREGISTERED
+}
+
+enum MovementKind {
+  PURCHASE
+  CONSUME
+  PRODUCE
+  SALE
+  ADJUST
+}
+
+enum EntrySource {
+  APP
+  VOICE
+  BILL
+  WHATSAPP
+  SEED
+}
+
+enum OrderChannel {
+  MARKETPLACE
+  DIRECT
+  AGENT
+}
+
+enum OrderStatus {
+  QUOTED
+  CONFIRMED
+  IN_PRODUCTION
+  DISPATCHED
+  DELIVERED
+  DECLINED
+}
+
+enum InvoiceKind {
+  TAX
+  PROFORMA
+  BILL_OF_SUPPLY
+}
+
+enum LedgerDirection {
+  RECEIVE // they owe us
+  PAY // we owe them
+}
+
+enum AlertKind {
+  ORDER
+  LOW_STOCK
+  PAYMENT
+  GST
+  INFO
+}
+
+enum MessageSender {
+  BUYER
+  PRODUCER
+  SUTRA
+}
+
+enum SupplierOrderStatus {
+  SENT
+  RECEIVED
+}
+
+/// MAKER turns raw material into goods (weaver, potter). TRADER buys finished goods and resells.
+enum BusinessKind {
+  MAKER
+  TRADER
+}
+
+enum WageType {
+  DAILY // rate per day present
+  PIECE // rate per piece made
+  MONTHLY // monthly salary, earned per day present (rate / 26)
+}
+
+enum PayCycle {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum WorkKind {
+  ATTENDANCE
+  PIECE
+}
+
+enum WorkerPaymentKind {
+  WAGE // cash paid against earned wages
+  ADVANCE // money given ahead (peshgi)
+  RECOVERY // part of earned wages adjusted against an advance (no cash moves)
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK
+}
+
+// ------------------------------------------------------------------ identity
+
+model User {
+  id             String         @id @default(cuid())
+  phone          String         @unique // E.164, e.g. +919800000001
+  role           UserRole       @default(PRODUCER)
+  producerId     String?        @unique
+  producer       Producer?      @relation(fields: [producerId], references: [id])
+  buyerId        String?        @unique
+  buyer          Buyer?         @relation(fields: [buyerId], references: [id])
+  language       String         @default("hi")
+  consentVersion String? // DPDP notice version the user accepted
+  consentAt      DateTime?
+  createdAt      DateTime       @default(now())
+  refreshTokens  RefreshToken[]
+}
+
+model OtpChallenge {
+  id         String    @id @default(cuid())
+  phone      String
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// Stores the first response for an Idempotency-Key so app retries never double-record.
+model IdempotencyRecord {
+  userId     String
+  key        String
+  route      String
+  statusCode Int
+  response   Json
+  createdAt  DateTime @default(now())
+
+  @@id([userId, key])
+}
+
+/// Named counters for order codes and invoice series (atomic increment).
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}
+
+// ------------------------------------------------------------------ business
+
+/// Industry profile: the only thing that changes between weavers, brass workers, potters...
+model Industry {
+  key       String    @id // handloom, brass, toys, pottery, food, machining
+  name      String
+  nameHi    String
+  machine   String // what limits capacity: loom, worker, lathe, kiln...
+  machineHi String
+  emoji     String
+  sortOrder Int        @default(0)
+  /// Starter materials, products and recipes offered during onboarding (see onboarding/industry-templates.ts).
+  template  Json       @default("{}")
+  clusters  Cluster[]
+  producers Producer[]
+}
+
+model Cluster {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  city        String
+  state       String
+  industryKey String
+  industry    Industry   @relation(fields: [industryKey], references: [key])
+  producers   Producer[]
+}
+
+model Producer {
+  id           String    @id @default(cuid())
+  slug         String    @unique
+  clusterId    String? // optional: many businesses are not part of a cluster
+  cluster      Cluster?  @relation(fields: [clusterId], references: [id])
+  industryKey  String
+  industry     Industry  @relation(fields: [industryKey], references: [key])
+  businessKind BusinessKind @default(MAKER)
+  onboardedAt  DateTime?
+  name         String
+  businessName String
+  city         String
+  state        String
+  phone        String
+  gstin        String?
+  gstScheme    GstScheme @default(REGULAR)
+  udyamNumber  String? // enables the MSME 45-day payment clock
+  upiId        String? // for payment-reminder links
+  language     String    @default("hi")
+  machines     Int
+  story        String
+  avatarColor  String    @default("#B4441F")
+  joinedAt     DateTime  @default(now())
+  onTimeRate   Float     @default(0.9)
+  ordersDone   Int       @default(0)
+  agentCutPct  Float     @default(25)
+
+  user           User?
+  materials      Material[]
+  products       Product[]
+  movements      StockMovement[]
+  purchases      Purchase[]
+  orders         Order[]
+  invoices       Invoice[]
+  ledger         LedgerEntry[]
+  alerts         Alert[]
+  messages       Message[]
+  supplierOrders SupplierOrder[]
+  voiceEntries   VoiceEntry[]
+  ownSuppliers   Supplier[]      @relation("OwnSuppliers")
+  clients        Buyer[]         @relation("OwnClients")
+  workers        Worker[]
+  workEntries    WorkEntry[]
+  workerPayments WorkerPayment[]
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  producerId     String? // set when a producer added this supplier themselves
+  producer       Producer?       @relation("OwnSuppliers", fields: [producerId], references: [id])
+  name           String
+  city           String
+  state          String
+  phone          String
+  gstin          String
+  leadTimeDays   Int
+  materials      Material[]
+  purchases      Purchase[]
+  supplierOrders SupplierOrder[]
+}
+
+model Material {
+  id             String          @id @default(cuid())
+  producerId     String
+  producer       Producer        @relation(fields: [producerId], references: [id])
+  supplierId     String?
+  supplier       Supplier?       @relation(fields: [supplierId], references: [id])
+  name           String
+  nameHi         String
+  unit           String
+  hsn            String
+  gstRate        Decimal         @db.Decimal(5, 2)
+  costPerUnit    Decimal         @db.Decimal(14, 2)
+  stock          Decimal         @db.Decimal(14, 3)
+  recipes        RecipeItem[]
+  movements      StockMovement[]
+  purchaseItems  PurchaseItem[]
+  supplierOrders SupplierOrder[]
+
+  @@index([producerId])
+}
+
+model Product {
+  id                     String          @id @default(cuid())
+  producerId             String
+  producer               Producer        @relation(fields: [producerId], references: [id])
+  slug                   String          @unique
+  name                   String
+  nameHi                 String
+  category               String
+  story                  String
+  price                  Decimal         @db.Decimal(14, 2) // wholesale, pre-GST
+  mrp                    Decimal         @db.Decimal(14, 2)
+  hsn                    String
+  gstRate                Decimal         @db.Decimal(5, 2)
+  stock                  Int
+  unitsPerMachinePerWeek Float
+  imageUrl               String?
+  palette                String          @default("#B4441F,#F4D9A6")
+  published              Boolean         @default(true)
+  createdAt              DateTime        @default(now())
+  recipe                 RecipeItem[]
+  movements              StockMovement[]
+  orders                 Order[]
+
+  @@index([producerId])
+}
+
+model RecipeItem {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id])
+  qtyPerUnit Decimal  @db.Decimal(14, 3)
+}
+
+/// Every change to stock is a movement. Usage history drives the reorder prediction.
+model StockMovement {
+  id         String       @id @default(cuid())
+  producerId String
+  producer   Producer     @relation(fields: [producerId], references: [id])
+  materialId String?
+  material   Material?    @relation(fields: [materialId], references: [id])
+  productId  String?
+  product    Product?     @relation(fields: [productId], references: [id])
+  kind       MovementKind
+  qty        Decimal      @db.Decimal(14, 3) // positive = in, negative = out
+  note       String?
+  source     EntrySource  @default(APP)
+  createdAt  DateTime     @default(now())
+
+  @@index([producerId, kind, createdAt])
+  @@index([materialId, kind, createdAt])
+}
+
+model Purchase {
+  id         String         @id @default(cuid())
+  producerId String
+  producer   Producer       @relation(fields: [producerId], references: [id])
+  supplierId String
+  supplier   Supplier       @relation(fields: [supplierId], references: [id])
+  billNo     String
+  billDate   DateTime
+  taxable    Decimal        @db.Decimal(14, 2)
+  cgst       Decimal        @db.Decimal(14, 2)
+  sgst       Decimal        @db.Decimal(14, 2)
+  igst       Decimal        @db.Decimal(14, 2)
+  total      Decimal        @db.Decimal(14, 2)
+  gstinValid Boolean        @default(true)
+  source     EntrySource    @default(BILL)
+  aiModel    String? // which model read the bill (AI transparency)
+  createdAt  DateTime       @default(now())
+  items      PurchaseItem[]
+
+  @@index([producerId, billDate])
+}
+
+model PurchaseItem {
+  id         String   @id @default(cuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id])
+  qty        Decimal  @db.Decimal(14, 3)
+  rate       Decimal  @db.Decimal(14, 2)
+  amount     Decimal  @db.Decimal(14, 2)
+}
+
+model SupplierOrder {
+  id         String              @id @default(cuid())
+  producerId String
+  producer   Producer            @relation(fields: [producerId], references: [id])
+  supplierId String
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  materialId String
+  material   Material            @relation(fields: [materialId], references: [id])
+  qty        Decimal             @db.Decimal(14, 3)
+  status     SupplierOrderStatus @default(SENT)
+  message    String
+  createdAt  DateTime            @default(now())
+}
+
+/// A buyer. With producerId set, it is that producer's own client (added from the app); otherwise a marketplace buyer.
+model Buyer {
+  id       String  @id @default(cuid())
+  producerId String?
+  producer   Producer? @relation("OwnClients", fields: [producerId], references: [id])
+  name     String
+  business String
+  city     String
+  state    String
+  gstin    String?
+  phone    String
+  user     User?
+  orders   Order[]
+}
+
+model Order {
+  id                  String       @id @default(cuid())
+  code                String       @unique // "SUT-1042"
+  producerId          String
+  producer            Producer     @relation(fields: [producerId], references: [id])
+  productId           String
+  product             Product      @relation(fields: [productId], references: [id])
+  buyerId             String?
+  buyer               Buyer?       @relation(fields: [buyerId], references: [id])
+  channel             OrderChannel
+  status              OrderStatus
+  qty                 Int
+  rate                Decimal      @db.Decimal(14, 2)
+  wantedBy            DateTime?
+  promisedQtyByWanted Int?
+  fullDate            DateTime?
+  quoteNote           String?
+  parentCode          String? // cluster bulk orders split across producers
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  deliveredAt         DateTime?
+  invoices            Invoice[]
+  messages            Message[]
+
+  @@index([producerId, status])
+}
+
+model Invoice {
+  id            String      @id @default(cuid())
+  number        String // unique per producer + financial year series, <= 16 chars
+  financialYear String // "2026-27"
+  kind          InvoiceKind
+  producerId    String
+  producer      Producer    @relation(fields: [producerId], references: [id])
+  orderId       String?
+  order         Order?      @relation(fields: [orderId], references: [id])
+  buyerName     String
+  buyerGstin    String?
+  buyerState    String
+  itemName      String
+  hsn           String
+  qty           Decimal     @db.Decimal(14, 3)
+  rate          Decimal     @db.Decimal(14, 2)
+  taxable       Decimal     @db.Decimal(14, 2)
+  gstRate       Decimal     @db.Decimal(5, 2)
+  cgst          Decimal     @db.Decimal(14, 2)
+  sgst          Decimal     @db.Decimal(14, 2)
+  igst          Decimal     @db.Decimal(14, 2)
+  total         Decimal     @db.Decimal(14, 2)
+  issuedAt      DateTime    @default(now())
+
+  @@unique([producerId, number])
+  @@index([producerId, kind, issuedAt])
+}
+
+model LedgerEntry {
+  id         String          @id @default(cuid())
+  producerId String
+  producer   Producer        @relation(fields: [producerId], references: [id])
+  party      String
+  direction  LedgerDirection
+  amount     Decimal         @db.Decimal(14, 2)
+  note       String
+  dueDate    DateTime?
+  settled    Boolean         @default(false)
+  settledAt  DateTime?
+  invoiceNo  String?
+  createdAt  DateTime        @default(now())
+
+  @@index([producerId, settled])
+}
+
+model Alert {
+  id         String    @id @default(cuid())
+  producerId String
+  producer   Producer  @relation(fields: [producerId], references: [id])
+  kind       AlertKind
+  title      String
+  titleHi    String
+  body       String
+  bodyHi     String
+  route      String? // app route, e.g. "/stock"
+  read       Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([producerId, read])
+}
+
+model Message {
+  id         String        @id @default(cuid())
+  producerId String
+  producer   Producer      @relation(fields: [producerId], references: [id])
+  orderId    String?
+  order      Order?        @relation(fields: [orderId], references: [id])
+  sender     MessageSender
+  text       String
+  textHi     String?
+  textEn     String?
+  createdAt  DateTime      @default(now())
+}
+
+/// Audit of every voice note: what was heard, what Sutra understood, and whether the user confirmed it.
+model VoiceEntry {
+  id          String      @id @default(cuid())
+  producerId  String
+  producer    Producer    @relation(fields: [producerId], references: [id])
+  transcript  String
+  parsed      Json
+  parser      String // "ai:<model>" | "rules"
+  confirmedAt DateTime?
+  createdAt   DateTime    @default(now())
+}
+
+// ------------------------------------------------------------------ labour
+// Wages ledger: earnings come from work entries; cash moves through payments.
+//   wage due          = earned - WAGE paid - RECOVERY
+//   advance pending   = ADVANCE given - RECOVERY
+// Recovery in a pay period is capped at 50% of that period's earnings (Code on Wages, 2019).
+
+model Worker {
+  id         String          @id @default(cuid())
+  producerId String
+  producer   Producer        @relation(fields: [producerId], references: [id])
+  name       String
+  phone      String?
+  skill      String? // "weaver", "polisher"...
+  wageType   WageType
+  rate       Decimal         @db.Decimal(12, 2)
+  productId  String? // default product for piece work
+  payCycle   PayCycle        @default(WEEKLY)
+  active     Boolean         @default(true)
+  joinedAt   DateTime        @default(now())
+  entries    WorkEntry[]
+  payments   WorkerPayment[]
+
+  @@index([producerId, active])
+}
+
+model WorkEntry {
+  id         String      @id @default(cuid())
+  producerId String
+  producer   Producer    @relation(fields: [producerId], references: [id])
+  workerId   String
+  worker     Worker      @relation(fields: [workerId], references: [id])
+  kind       WorkKind
+  date       DateTime    @db.Date
+  units      Decimal     @db.Decimal(10, 2) // days present (1, 0.5) or pieces made
+  rate       Decimal     @db.Decimal(12, 2)
+  amount     Decimal     @db.Decimal(14, 2)
+  productId  String?
+  note       String?
+  source     EntrySource @default(APP)
+  createdAt  DateTime    @default(now())
+
+  @@index([workerId, date])
+}
+
+model WorkerPayment {
+  id         String            @id @default(cuid())
+  producerId String
+  producer   Producer          @relation(fields: [producerId], references: [id])
+  workerId   String
+  worker     Worker            @relation(fields: [workerId], references: [id])
+  kind       WorkerPaymentKind
+  amount     Decimal           @db.Decimal(14, 2)
+  mode       PaymentMode       @default(CASH)
+  note       String?
+  paidAt     DateTime          @default(now())
+
+  @@index([workerId, paidAt])
+}
