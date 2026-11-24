@@ -38,7 +38,21 @@ function nextInvoice(producerId: string, businessName: string, kind: "TAX" | "PR
   return { number: invoiceNumber(businessPrefix(businessName), kind, fy.short, seq), financialYear: fy.label };
 }
 
+/** Demo phone numbers: makers +91 98000 000NN, buyers +91 97000 000NN. Everything else is a real account. */
+const DEMO_PHONE = /^\+91(98|97)000000\d\d$/;
+
 async function reset() {
+  // Never wipe accounts people made themselves (their onboarding, stock, khata) by accident.
+  const users = await db.user.findMany({ select: { phone: true } });
+  const real = users.filter((u) => !DEMO_PHONE.test(u.phone)).length;
+  if (real > 0 && !process.argv.includes("--wipe-all")) {
+    console.error(
+      `Stopped: ${real} real account(s) exist and the demo seed would erase them.
+` +
+        "Your data is untouched. To erase everything anyway: npm run db:seed:wipe-all",
+    );
+    process.exit(1);
+  }
   const tables = [
     "CapacityEvent", "WorkerPayment", "WorkEntry", "Worker", "VoiceEntry", "Message", "Alert", "LedgerEntry", "Invoice", "Order", "SupplierOrder", "PurchaseItem", "Purchase",
     "StockMovement", "RecipeItem", "Product", "Material", "RefreshToken", "OtpChallenge", "IdempotencyRecord", "User",

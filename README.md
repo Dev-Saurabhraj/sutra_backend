@@ -23,6 +23,11 @@ Checks: `npm run typecheck` · `npm test`.
 the real code is also printed in the server log. Other makers use `+9198000000NN` (02–13). Sitaram Koli (`04`) is on
 the composition scheme and Kamla Bai (`07`) is unregistered, to exercise the GST rules.
 
+
+**Your data is safe from the demo seed.** `npm run db:seed` refuses to run once any real (non-demo) account
+exists, because it starts from an empty database. `npm run db:seed:wipe-all` erases everything on purpose.
+The Postgres data lives in the `pgdata` Docker volume, so restarting the server or Docker keeps every account.
+
 ## Layout
 
 ```

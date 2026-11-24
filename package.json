@@ -13,6 +13,7 @@
         "db:generate": "prisma generate",
         "db:push": "prisma db push",
         "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
+        "db:seed:wipe-all": "tsx --env-file-if-exists=.env prisma/seed.ts --wipe-all",
         "db:reset": "prisma db push --force-reset && npm run db:seed"
     },
     "license": "UNLICENSED",
