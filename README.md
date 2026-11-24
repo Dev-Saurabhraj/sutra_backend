@@ -54,6 +54,8 @@ prisma/                    schema.prisma, seed.ts
 | Domain service shared by channels | `InventoryService.*In(repos, …)` | Voice entries and app taps run the same produce/sell/stock-in code inside one transaction |
 | Derived ledger | `labour/wages.ts` | Wage due and advance pending are computed from append-only entries; the 50% rule is a pure, tested function |
 | Template / data-driven config | `onboarding/industry-templates.ts` | A new industry is data, not code |
+| State machine | `engine/order-flow.ts` | Order stages and allowed moves in one pure table; services ask it, never hard-code statuses |
+| Strategy + fallback | `ai/translator.ts`, `ai/story-writer.ts`, `catalog/image-cleaner.ts` | Chat translation, catalog stories and photo clean-up each have an offline implementation |
 | Composition root / DI | `container.ts` | Constructor injection everywhere; no hidden singletons |
 
 ## API (v1)
@@ -97,11 +99,22 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `GET /api/v1/gst/periods` | Last 6 months and 4 financial-year quarters |
 | `GET /api/v1/gst/summary?month=2026-11` or `?quarter=2026-Q3` | Regular: output tax vs ITC, payable / carry forward, ITC at risk · Composition: 1% CMP-08 estimate + limit watch · Unregistered: registration threshold + inter-state warning · issues and filing hints |
 | `GET /api/v1/gst/export.csv` · `GET /api/v1/gst/gstr1.json` | Files for the CA (review before filing); GSTR-1 only for regular dealers |
+| `GET /api/v1/orders?tab=new\|active\|done` | Orders inbox with counts per tab and the last message |
+| `GET /api/v1/orders/:code` | Order + allowed actions + live "can I deliver?" (stock, looms, other orders, material lead times) + price floor (recipe + piece wage) + chat + invoices |
+| `POST /api/v1/orders/:code/respond` `{accept}` | Accept (promises what the simulation says) or decline, with a message to the buyer |
+| `POST /api/v1/orders/:code/dispatch` `{transporter?, lrNumber?, photo?}` | Stock out, tax invoice / bill of supply, money to collect, proof of dispatch (wrong stage → 409) |
+| `GET /api/v1/orders/:code/dispatch-photo` | The proof photo |
+| `POST /api/v1/orders/:code/deliver` | Delivered; updates orders done and the on-time rate |
+| `POST /api/v1/orders/:code/messages` `{text}` | Write in Hindi; the buyer gets English (original always kept; marked untranslated when AI is off) |
+| `GET /api/v1/catalog` | Products with unit cost, margin at list price, published / ready |
+| `POST /api/v1/catalog/:id/draft` `{note, photo?}` | Clean the photo (square, straightened, even light) and draft an honest English story; nothing is published |
+| `PATCH /api/v1/catalog/:id` `{name?, story?, price?, published?, acceptBelowCost?}` | Save the listing; publishing below cost needs `acceptBelowCost` (409 `BELOW_COST`) |
+| `GET /media/catalog/*` | Public catalog photos (nothing else under `uploads/` is served) |
 | `GET /health` | DB check and AI mode |
 
 ## Files
 
-Bill photos are saved through the `FileStore` interface (`LocalFileStore` → `uploads/`, a Docker volume). Swap in cloud
+Bill, dispatch and catalog photos are saved through the `FileStore` interface (`LocalFileStore` → `uploads/`, a Docker volume). Swap in cloud
 storage by adding another implementation in `container.ts`. Demo bill images live in `assets/samples/`.
 
 ## AI

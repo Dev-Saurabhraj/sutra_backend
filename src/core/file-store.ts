@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /** Where uploaded files (bill photos) are kept. Local disk now; swap for S3/GCS without touching services. */
 export interface FileStore {
   /** Saves bytes under a random name and returns the stored path (relative to the store). */
   save(folder: string, bytes: Buffer, extension: string): Promise<string>;
+  /** Reads a stored file back, or null if it is gone. */
+  read(stored: string): Promise<Buffer | null>;
 }
 
 export class LocalFileStore implements FileStore {
@@ -18,5 +20,15 @@ export class LocalFileStore implements FileStore {
     await mkdir(dir, { recursive: true });
     await writeFile(path.join(dir, name), bytes);
     return `${safeFolder}/${name}`;
+  }
+
+  async read(stored: string): Promise<Buffer | null> {
+    const full = path.resolve(this.baseDir, stored);
+    if (!full.startsWith(path.resolve(this.baseDir) + path.sep)) return null; // no ../ escapes
+    try {
+      return await readFile(full);
+    } catch {
+      return null;
+    }
   }
 }

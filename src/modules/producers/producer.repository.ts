@@ -57,6 +57,11 @@ export class ProducerRepository {
     await this.db.industry.upsert({ where: { key: row.key }, update: {}, create: row });
   }
 
+  /** One more order delivered: count it and update the on-time rate buyers see. */
+  async recordDelivery(producerId: string, onTimeRate: number): Promise<void> {
+    await this.db.producer.update({ where: { id: producerId }, data: { ordersDone: { increment: 1 }, onTimeRate } });
+  }
+
   async updateLanguage(producerId: string, language: string): Promise<void> {
     await this.db.producer.update({ where: { id: producerId }, data: { language } });
   }

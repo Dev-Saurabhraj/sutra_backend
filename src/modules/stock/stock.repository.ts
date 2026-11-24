@@ -99,6 +99,36 @@ export class StockRepository {
     return p.id;
   }
 
+  /** Product with full recipe detail: what the quote engine and the price floor need. */
+  async recipeDetails(producerId: string, productId: string) {
+    const p = await this.db.product.findFirst({
+      where: { id: productId, producerId },
+      include: { recipe: { include: { material: { include: { supplier: { select: { id: true, name: true, leadTimeDays: true } } } } } } },
+    });
+    if (!p) return null;
+    return {
+      id: p.id, name: p.name, nameHi: p.nameHi, stock: p.stock, price: num(p.price), unitsPerMachinePerWeek: p.unitsPerMachinePerWeek,
+      recipe: p.recipe.map((r) => ({
+        materialId: r.materialId, name: r.material.name, nameHi: r.material.nameHi, unit: r.material.unit,
+        qtyPerUnit: num(r.qtyPerUnit), materialStock: num(r.material.stock), costPerUnit: num(r.material.costPerUnit), supplier: r.material.supplier,
+      })),
+    };
+  }
+
+  /** Catalog fields of a product (what buyers see). */
+  async updateListing(producerId: string, productId: string, data: { name?: string; story?: string; price?: number; published?: boolean; imageUrl?: string; category?: string }) {
+    const r = await this.db.product.updateMany({ where: { id: productId, producerId }, data });
+    return r.count === 1;
+  }
+
+  async catalog(producerId: string) {
+    const rows = await this.db.product.findMany({ where: { producerId }, include: { recipe: { include: { material: { select: { costPerUnit: true } } } } }, orderBy: { createdAt: "asc" } });
+    return rows.map((p) => ({
+      ...toProductStock(p), story: p.story, mrp: num(p.mrp), published: p.published,
+      recipeCost: p.recipe.map((r) => ({ qtyPerUnit: num(r.qtyPerUnit), costPerUnit: num(r.material.costPerUnit) })),
+    }));
+  }
+
   async materialGst(materialId: string): Promise<{ gstRate: number; hsn: string }> {
     const m = await this.db.material.findUniqueOrThrow({ where: { id: materialId }, select: { gstRate: true, hsn: true } });
     return { gstRate: num(m.gstRate), hsn: m.hsn };

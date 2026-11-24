@@ -30,7 +30,12 @@ import { ClaudeBillReader } from "./modules/bills/claude-bill-reader.js";
 import { SampleBillReader } from "./modules/bills/sample-bills.js";
 import { GstService } from "./modules/gst/gst.service.js";
 import { GstRepository } from "./modules/gst/gst.repository.js";
-import { LocalFileStore } from "./core/file-store.js";
+import { LocalFileStore, type FileStore } from "./core/file-store.js";
+import { ClaudeTranslator, NoTranslator, type Translator } from "./ai/translator.js";
+import { ClaudeStoryWriter, TemplateStoryWriter, type StoryWriter } from "./ai/story-writer.js";
+import { OrderService } from "./modules/orders/order.service.js";
+import { CatalogService } from "./modules/catalog/catalog.service.js";
+import { SharpImageCleaner } from "./modules/catalog/image-cleaner.js";
 
 export type Container = {
   env: Env;
@@ -51,6 +56,9 @@ export type Container = {
   onboarding: OnboardingService;
   bills: BillService;
   gst: GstService;
+  orders: OrderService;
+  catalog: CatalogService;
+  uploadsDir: string;
 };
 
 export function buildContainer(env: Env, logger: Logger, clock: Clock = systemClock, uploadsDir = "uploads"): Container {
@@ -79,10 +87,15 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
   const billReader: BillReader = new FallbackBillReader(
     env.aiEnabled ? [new ClaudeBillReader(env.ANTHROPIC_API_KEY, logger), new SampleBillReader(() => clock.now())] : [new SampleBillReader(() => clock.now())],
   );
-  const bills = new BillService(repos, uow, billReader, new LocalFileStore(uploadsDir), clock, env.aiEnabled);
+  const files: FileStore = new LocalFileStore(uploadsDir);
+  const bills = new BillService(repos, uow, billReader, files, clock, env.aiEnabled);
+  const translator: Translator = env.aiEnabled ? new ClaudeTranslator(env.ANTHROPIC_API_KEY, logger) : new NoTranslator();
+  const storyWriter: StoryWriter = env.aiEnabled ? new ClaudeStoryWriter(env.ANTHROPIC_API_KEY, logger) : new TemplateStoryWriter();
+  const orders = new OrderService(repos, uow, inventory, translator, files, clock);
+  const catalog = new CatalogService(repos, storyWriter, new SharpImageCleaner(), files);
   const onboarding = new OnboardingService(repos, uow, auth, clock);
 
   registerLowStockWatcher(bus, stock, repos.alerts);
 
-  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst };
+  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home, labour, inventory, onboarding, bills, gst, orders, catalog, uploadsDir };
 }

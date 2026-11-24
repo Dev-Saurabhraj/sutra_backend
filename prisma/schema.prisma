@@ -429,6 +429,11 @@ model Order {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
   deliveredAt         DateTime?
+  // proof of dispatch: what the buyer can check
+  dispatchedAt        DateTime?
+  transporter         String?
+  lrNumber            String? // lorry receipt / docket number
+  dispatchPhoto       String? // stored photo of the packed goods or LR
   invoices            Invoice[]
   messages            Message[]
 

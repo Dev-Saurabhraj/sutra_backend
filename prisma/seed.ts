@@ -73,11 +73,11 @@ const HANDLOOM_PRODS: ProdDef[] = [
   { key: "sc-saree", name: "Chanderi Silk-Cotton Saree", nameHi: "चंदेरी सिल्क-कॉटन साड़ी", category: "Silk-Cotton Saree", price: 3200, mrp: 6000, hsn: "5007", gst: 5, upmw: 1.5, share: 0.5,
     recipe: { silk: 0.25, cotton: 0.3, zari: 0.05 },
     story: "Woven on a traditional pit loom, this featherlight silk-cotton saree carries the sheer, glass-like texture Chanderi is famous for. Each motif is hand-inserted with a separate needle, so no two pieces are exactly alike." },
-  { key: "silk-saree", name: "Pure Silk Chanderi Saree, Zari Border", nameHi: "शुद्ध रेशम चंदेरी साड़ी, ज़री बॉर्डर", category: "Pure Silk Saree", price: 5400, mrp: 9500, hsn: "5007", gst: 5, upmw: 0.8, share: 0.2,
-    recipe: { silk: 0.55, zari: 0.12 },
+  { key: "silk-saree", name: "Pure Silk Chanderi Saree, Zari Border", nameHi: "शुद्ध रेशम चंदेरी साड़ी, ज़री बॉर्डर", category: "Pure Silk Saree", price: 6200, mrp: 10500, hsn: "5007", gst: 5, upmw: 0.8, share: 0.2,
+    recipe: { silk: 0.55, zari: 0.08 },
     story: "A pure mulberry-silk Chanderi with a rich zari border and pallu. It takes close to a week of continuous weaving on one loom, and is finished and checked by hand before dispatch." },
   { key: "dupatta", name: "Chanderi Dupatta", nameHi: "चंदेरी दुपट्टा", category: "Dupatta", price: 850, mrp: 1600, hsn: "5007", gst: 5, upmw: 4, share: 0.15,
-    recipe: { silk: 0.1, cotton: 0.12, zari: 0.02 },
+    recipe: { silk: 0.06, cotton: 0.12, zari: 0.02 },
     story: "A light, translucent dupatta with scattered hand-woven butis. Pairs with any kurta and is a steady seller for boutiques all year round." },
   { key: "suit", name: "Chanderi Suit Fabric Set (3 pc)", nameHi: "चंदेरी सूट सेट (3 पीस)", category: "Suit Set", price: 1600, mrp: 2800, hsn: "5007", gst: 5, upmw: 2.5, share: 0.15,
     recipe: { silk: 0.15, cotton: 0.35, zari: 0.03 },
@@ -350,6 +350,25 @@ async function main() {
       },
     });
 
+    // A big inquiry the looms can only partly meet: shows the honest "this much by then, all by later" answer.
+    const scSaree = rohit.products.find((p) => p.slug === "rohit-sc-saree")!;
+    const kaveri = buyerBy("Kaveri Boutique");
+    const bulk = await db.order.create({
+      data: {
+        code: nextOrderCode(), producerId: rohit.id, productId: scSaree.id, buyerId: kaveri.id, channel: "MARKETPLACE", status: "QUOTED",
+        qty: 200, rate: Math.round(Number(scSaree.price) * 0.92), wantedBy: daysAhead(21), createdAt: daysAgo(0.3),
+      },
+    });
+    await db.message.create({
+      data: {
+        producerId: rohit.id, orderId: bulk.id, sender: "BUYER",
+        text: "We are opening two new stores. Can you supply 200 silk-cotton sarees in 3 weeks? We can pay 8% below your list price for this volume.",
+        textEn: "We are opening two new stores. Can you supply 200 silk-cotton sarees in 3 weeks? We can pay 8% below your list price for this volume.",
+        textHi: "हम दो नए स्टोर खोल रहे हैं। क्या आप 3 हफ़्ते में 200 सिल्क-कॉटन साड़ियाँ दे सकते हैं? इतनी मात्रा के लिए हम आपकी लिस्ट कीमत से 8% कम देंगे।",
+        createdAt: daysAgo(0.3),
+      },
+    });
+
     await db.ledgerEntry.createMany({
       data: [
         { producerId: rohit.id, party: "Neel Textiles, Jaipur", direction: "RECEIVE", amount: 35700, note: "Advance balance for 40 dupattas", dueDate: daysAhead(10), createdAt: daysAgo(4) },
@@ -365,7 +384,9 @@ async function main() {
 
     await db.alert.createMany({
       data: [
-        { producerId: rohit.id, kind: "ORDER", title: "New inquiry from Tanaa Bana Store, Indore", titleHi: "टाना बाना स्टोर, इंदौर से नई पूछताछ",
+        { producerId: rohit.id, kind: "ORDER", title: "Kaveri Boutique wants 200 silk-cotton sarees", titleHi: "कावेरी बुटीक को 200 सिल्क-कॉटन साड़ियाँ चाहिए",
+          body: "Needed in 3 weeks, at 8% below list price.", bodyHi: "3 हफ़्ते में चाहिए, लिस्ट कीमत से 8% कम पर।", route: `/order/${bulk.code}`, createdAt: daysAgo(0.3) },
+        { producerId: rohit.id, kind: "ORDER", route: `/order/${inquiry.code}`, title: "New inquiry from Tanaa Bana Store, Indore", titleHi: "टाना बाना स्टोर, इंदौर से नई पूछताछ",
           body: "15 pure silk sarees with red zari border, needed in 20 days.", bodyHi: "लाल ज़री बॉर्डर वाली 15 शुद्ध रेशम साड़ियाँ, 20 दिन में चाहिए।", createdAt: daysAgo(1) },
         { producerId: rohit.id, kind: "LOW_STOCK", title: "Zari (metallic thread) is running low", titleHi: "ज़री कम हो रही है",
           body: `Only ${Number(zari.stock)} kg left. At your usage it will finish in about a week.`, bodyHi: `सिर्फ़ ${Number(zari.stock)} किलो बची है। लगभग एक हफ़्ते में ख़त्म हो जाएगी।`, route: "/stock", createdAt: daysAgo(0.2) },

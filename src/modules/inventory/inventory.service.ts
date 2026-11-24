@@ -58,24 +58,40 @@ export class InventoryService {
     if (!product) throw AppError.notFound("Product");
     const now = this.clock.now();
     const rate = input.rate ?? product.price;
-    await repos.stock.moveProduct(
-      { producerId: producer.id, productId: product.id, kind: "SALE", qty: -input.qty, source: input.source },
-      -Math.min(input.qty, product.stock),
-    );
     const order = await repos.orders.create({
       code: `SUT-${await repos.counters.next("order", 1001)}`,
       producerId: producer.id, productId: product.id, buyerId: input.buyer.id, channel: "DIRECT", status: "DISPATCHED",
       qty: input.qty, rate, wantedBy: now, fullDate: now, quoteNote: input.note,
     });
+    const invoice = await this.shipIn(repos, producer, { productId: product.id, qty: input.qty, rate, buyer: input.buyer, orderId: order.id, source: input.source });
+    return { product, invoice };
+  }
+
+  /**
+   * Goods leave the workshop for an order: finished stock down, the right GST document, money to collect.
+   * Used by a direct sale and by dispatching a buyer's order.
+   */
+  async shipIn(
+    repos: Repositories,
+    producer: ProducerProfile,
+    input: { productId: string; qty: number; rate: number; buyer: SaleBuyer; orderId: string; source: EntrySource },
+  ) {
+    const product = await repos.stock.product(producer.id, input.productId);
+    if (!product) throw AppError.notFound("Product");
+    const now = this.clock.now();
+    await repos.stock.moveProduct(
+      { producerId: producer.id, productId: product.id, kind: "SALE", qty: -input.qty, source: input.source },
+      -Math.min(input.qty, product.stock),
+    );
     const invoice = await this.invoices.issueForSale(repos, {
       producer, buyer: input.buyer, item: { name: product.name, hsn: product.hsn, gstRate: product.gstRate },
-      qty: input.qty, rate, orderId: order.id, at: now,
+      qty: input.qty, rate: input.rate, orderId: input.orderId, at: now,
     });
     await repos.khata.create({
       producerId: producer.id, party: input.buyer.name, direction: "RECEIVE", amount: invoice.total,
       note: `Invoice ${invoice.number}`, dueDate: addDays(now, PAYMENT_TERMS_DAYS), invoiceNo: invoice.number,
     });
-    return { product, invoice };
+    return invoice;
   }
 
   /** Raw material came in. With a supplier and rate it is also a GST purchase and money to pay. */
