@@ -31,18 +31,18 @@ export class ProducerRepository {
   async findProfile(producerId: string): Promise<ProducerProfile | null> {
     const p = await this.db.producer.findUnique({
       where: { id: producerId },
-      include: { cluster: { include: { industry: true } } },
+      include: { industry: true, cluster: true },
     });
     if (!p) return null;
-    const { cluster } = p;
+    const cluster = p.cluster;
     return {
       id: p.id, slug: p.slug, name: p.name, businessName: p.businessName, city: p.city, state: p.state, phone: p.phone,
       gstin: p.gstin, gstScheme: p.gstScheme, udyamNumber: p.udyamNumber, upiId: p.upiId, machines: p.machines,
       avatarColor: p.avatarColor, language: p.language, story: p.story, onTimeRate: p.onTimeRate, ordersDone: p.ordersDone,
-      cluster: { id: cluster.id, name: cluster.name, city: cluster.city },
+      cluster: cluster ? { id: cluster.id, name: cluster.name, city: cluster.city } : { id: "", name: "-", city: "" },
       industry: {
-        key: cluster.industry.key, name: cluster.industry.name, nameHi: cluster.industry.nameHi,
-        machine: cluster.industry.machine, machineHi: cluster.industry.machineHi, emoji: cluster.industry.emoji,
+        key: p.industry.key, name: p.industry.name, nameHi: p.industry.nameHi,
+        machine: p.industry.machine, machineHi: p.industry.machineHi, emoji: p.industry.emoji,
       },
     };
   }

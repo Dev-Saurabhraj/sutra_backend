@@ -18,6 +18,7 @@ import { InvoiceService } from "./modules/invoices/invoice.service.js";
 import { VoiceService } from "./modules/voice/voice.service.js";
 import { VoiceActionRegistry } from "./modules/voice/voice.registry.js";
 import { KhataService } from "./modules/khata/khata.service.js";
+import { LabourService } from "./modules/labour/labour.service.js";
 import { AlertService } from "./modules/alerts/alert.service.js";
 import { HomeService } from "./modules/producers/home.service.js";
 
@@ -33,6 +34,7 @@ export type Container = {
   invoices: InvoiceService;
   voice: VoiceService;
   khata: KhataService;
+  labour: LabourService;
   alerts: AlertService;
   home: HomeService;
 };
@@ -56,9 +58,10 @@ export function buildContainer(env: Env, logger: Logger, clock: Clock = systemCl
   const voice = new VoiceService(repos, uow, voiceParser, VoiceActionRegistry.withDefaults(), invoices, bus, clock);
   const khata = new KhataService(repos.khata, repos.producers, clock);
   const alerts = new AlertService(repos.alerts);
+  const labour = new LabourService(repos, uow, clock);
   const home = new HomeService(repos, stock, clock);
 
   registerLowStockWatcher(bus, stock, repos.alerts);
 
-  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, alerts, home };
+  return { env, logger, prisma, repos, uow, tokens, auth, stock, invoices, voice, khata, labour, alerts, home };
 }
