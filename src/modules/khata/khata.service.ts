@@ -2,6 +2,7 @@ import { AppError } from "../../core/errors.js";
 import { inr } from "../../shared/money.js";
 import { addDays, daysBetween, shortDate, type Clock } from "../../shared/time.js";
 import type { ProducerProfile, ProducerRepository } from "../producers/producer.repository.js";
+import { khataCsv } from "./khata-export.js";
 import type { KhataRepository, LedgerRow } from "./khata.repository.js";
 
 /** Income-tax Act Sec. 43B(h): buyers must pay a Udyam micro/small supplier within 45 days (RULES C4). */
@@ -37,6 +38,14 @@ export class KhataService {
     if (!(await this.khata.settle(producerId, id, this.clock.now()))) {
       throw AppError.conflict("ALREADY_SETTLED", "This entry is already settled");
     }
+  }
+
+  /** The open (or settled) ledger as a CSV file the maker can hand to a CA or partner. */
+  async export(producerId: string, settled: boolean) {
+    const [producer, rows] = await Promise.all([this.producer(producerId), this.khata.list(producerId, settled)]);
+    const body = khataCsv({ business: producer.businessName, status: settled ? "settled" : "open" }, rows);
+    const filename = `khata-${settled ? "settled" : "open"}-${this.clock.now().toISOString().slice(0, 10)}.csv`;
+    return { filename, body };
   }
 
   /** A polite reminder with a UPI link, citing the 45-day rule only when the producer qualifies. */

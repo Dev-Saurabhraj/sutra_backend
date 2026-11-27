@@ -15,6 +15,14 @@ export function khataRouter(khata: KhataService): Router {
     res.json(await khata.list(producerIdOf(req), status === "settled"));
   });
 
+  r.get("/export.csv", async (req, res) => {
+    const { status } = parse(ListQuery, req.query);
+    const file = await khata.export(producerIdOf(req), status === "settled");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+    res.send(`﻿${file.body}`); // BOM so Excel opens Hindi names correctly
+  });
+
   r.post("/:id/settle", async (req, res) => {
     const { id } = parse(IdParam, req.params);
     await khata.settle(producerIdOf(req), id);
