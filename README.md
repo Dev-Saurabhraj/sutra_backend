@@ -75,7 +75,22 @@ Errors are always `{ "error": { "code", "message", "details"? } }`.
 | `POST /api/v1/khata/:id/settle` · `GET /khata/:id/reminder` | Settle; reminder text + WhatsApp + UPI links |
 | `GET /api/v1/alerts?unread=true` · `POST /alerts/:id/read` · `POST /alerts/read-all` | Alerts |
 | `GET /api/v1/invoices` · `GET /invoices/:id` | Invoices / bills of supply |
+| `GET /api/v1/labour` | Team: workers with wage due, advance, today's attendance + totals |
+| `POST /api/v1/labour/workers` `{name, phone?, wageType, rate, payCycle}` | Add a worker (daily / piece / monthly) |
+| `POST /api/v1/labour/attendance` `{marks: [{workerId, units}]}` | Mark today's attendance (1 / 0.5 / 0) |
+| `POST /api/v1/labour/workers/:id/piece` `{qty}` | Record piece work |
+| `GET /api/v1/labour/workers/:id/pay-preview` | How a wage payment splits (cash vs advance recovery) |
+| `POST /api/v1/labour/workers/:id/pay` `{mode, cash?}` | Pay wages; returns a WhatsApp wage slip |
+| `POST /api/v1/labour/workers/:id/advance` `{amount, mode}` | Give an advance (peshgi) |
+| `GET /api/v1/labour/workers/:id/history` | Earnings and payments ledger |
+| `GET /api/v1/labour/workers/:id/slip` | Shareable wage slip (no save) |
 | `GET /health` | DB check and AI mode |
+
+## Labour
+
+Wages follow the Code on Wages, 2019: daily wages are due same day, weekly wages by Saturday, monthly wages by the
+7th of the next month. When a worker has a pending advance (peshgi), part of each wage payment is adjusted against it;
+that recovery is capped at 50% of the current pay period's earnings. See `modules/labour/wages.ts` for the pure rules.
 
 ## AI
 

@@ -14,6 +14,7 @@ import { voiceRouter } from "./modules/voice/voice.controller.js";
 import { khataRouter } from "./modules/khata/khata.controller.js";
 import { alertRouter } from "./modules/alerts/alert.controller.js";
 import { invoiceRouter } from "./modules/invoices/invoice.controller.js";
+import { labourRouter } from "./modules/labour/labour.controller.js";
 
 export function createApp(c: Container): Express {
   const app = express();
@@ -42,6 +43,7 @@ export function createApp(c: Container): Express {
   secured.use("/khata", khataRouter(c.khata));
   secured.use("/alerts", alertRouter(c.alerts));
   secured.use("/invoices", invoiceRouter(c.invoices));
+  secured.use("/labour", labourRouter(c.labour));
   v1.use(secured);
 
   app.use("/api/v1", v1);

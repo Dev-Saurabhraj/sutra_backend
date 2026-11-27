@@ -6,6 +6,7 @@ import { StockRepository } from "../modules/stock/stock.repository.js";
 import { KhataRepository } from "../modules/khata/khata.repository.js";
 import { AlertRepository } from "../modules/alerts/alert.repository.js";
 import { InvoiceRepository } from "../modules/invoices/invoice.repository.js";
+import { LabourRepository } from "../modules/labour/labour.repository.js";
 import { OrderRepository } from "../modules/orders/order.repository.js";
 import { VoiceRepository } from "../modules/voice/voice.repository.js";
 import { CounterRepository } from "./counter.repository.js";
@@ -18,6 +19,7 @@ export type Repositories = {
   khata: KhataRepository;
   alerts: AlertRepository;
   invoices: InvoiceRepository;
+  labour: LabourRepository;
   orders: OrderRepository;
   voice: VoiceRepository;
   counters: CounterRepository;
@@ -31,6 +33,7 @@ export function createRepositories(db: DbClient): Repositories {
     khata: new KhataRepository(db),
     alerts: new AlertRepository(db),
     invoices: new InvoiceRepository(db),
+    labour: new LabourRepository(db),
     orders: new OrderRepository(db),
     voice: new VoiceRepository(db),
     counters: new CounterRepository(db),
